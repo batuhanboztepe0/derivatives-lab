@@ -91,6 +91,13 @@ class DeepHedger:
     cvar_alpha    : Tail level α for "cvar" (e.g. 0.5 = mean of worst 50%).
     hidden_size   : Width of the two-hidden-layer policy MLP.
     seed          : Seed for path simulation and weight init (reproducibility).
+    hedge_options : Optional list of (type, strike) European options the policy may
+                    hold *statically* alongside the dynamic share hedge — e.g.
+                    [("put", 90), ("call", 110)] (a long strangle).  Each is bought
+                    once at t=0 at its fair price (the mean discounted payoff over the
+                    training paths, so the overlay is zero-NPV by construction) and
+                    held to T.  This is the only way to hedge the convex jump risk
+                    that a delta-only hedge cannot touch.  None → pure delta hedging.
     """
 
     S0: float
@@ -106,10 +113,13 @@ class DeepHedger:
     cvar_alpha: float = 0.5
     hidden_size: int = 32
     seed: int = SEED
+    hedge_options: list[tuple[OptionType, float]] | None = None
 
     def __post_init__(self) -> None:
         self._policy = None         # nn.Sequential, built in fit()
         self._cvar_w = None         # nn.Parameter, the VaR level for CVaR
+        self._opt_qty = None        # nn.Parameter, learned hedge-option quantities
+        self._hedge_prices = None   # fair prices of the hedge options (Tensor)
         self.fitted = False
         self.train_losses: list[float] = []
 
@@ -189,12 +199,32 @@ class DeepHedger:
 
     # ── Differentiable P&L engine (shared by policy and benchmark) ────────────
 
-    def _pnl(self, torch, paths, holdings):
+    def _option_overlay(self, torch, paths, opt_qty):
+        """
+        Discounted P&L of a static long option position, net of its fair cost.
+
+        Each option j is held in quantity opt_qty[j], pays e^{-rT}·payoff_j(S_T),
+        and was bought at self._hedge_prices[j] (its fair value), so the leg is
+        zero-mean under the path measure and acts purely as a risk (gamma) hedge.
+        """
+        S_T = paths[:, -1]
+        disc = math.exp(-self.r * self.T)
+        overlay = torch.zeros(paths.shape[0])
+        for j, (otype, strike) in enumerate(self.hedge_options):
+            if otype == "call":
+                po = torch.clamp(S_T - strike, min=0.0)
+            else:
+                po = torch.clamp(strike - S_T, min=0.0)
+            overlay = overlay + opt_qty[j] * (disc * po - self._hedge_prices[j])
+        return overlay
+
+    def _pnl(self, torch, paths, holdings, opt_qty=None):
         """
         Discounted terminal P&L for short-one-option, given a holdings matrix.
 
         Identical accounting for the learned policy and the BS-delta benchmark,
-        so any P&L difference is purely the hedge, not the bookkeeping.
+        so any P&L difference is purely the hedge, not the bookkeeping.  When
+        opt_qty is supplied the static option overlay (gamma hedge) is added.
         """
         n = self.n_steps
         dt = self.T / n
@@ -216,7 +246,10 @@ class DeepHedger:
             payoff = torch.clamp(self.K - S_T, min=0.0)
         disc_payoff = math.exp(-self.r * self.T) * payoff
 
-        return self.premium + hedge_gain - disc_payoff - cost
+        pnl = self.premium + hedge_gain - disc_payoff - cost
+        if opt_qty is not None:
+            pnl = pnl + self._option_overlay(torch, paths, opt_qty)
+        return pnl
 
     def _risk(self, torch, pnl):
         """Convex risk measure of the P&L (lower is better)."""
@@ -233,10 +266,16 @@ class DeepHedger:
     # ── Training ──────────────────────────────────────────────────────────────
 
     def fit(self, epochs: int = 300, batch_size: int = 4096, lr: float = 1e-3,
-            verbose: bool = False) -> DeepHedger:
+            verbose: bool = False, paths_fn=None) -> DeepHedger:
         """
         Train the hedging policy by minimising the risk measure over fresh Monte
         Carlo batches (backprop-through-time).  Returns self.
+
+        paths_fn : optional callable(batch_size) -> Tensor (batch, n_steps+1).
+                   Supply this to train in a non-GBM "world" — e.g. Merton-jump or
+                   Heston paths from the model zoo — so the policy learns to hedge
+                   dynamics that the BS-delta benchmark cannot.  Defaults to the
+                   built-in risk-neutral GBM simulator.
         """
         import torch
         from torch import nn
@@ -247,13 +286,32 @@ class DeepHedger:
         if self.risk == "cvar":
             self._cvar_w = nn.Parameter(torch.zeros(()))
             params.append(self._cvar_w)
-        opt = torch.optim.Adam(params, lr=lr)
 
+        draw = paths_fn if paths_fn is not None else self.simulate_paths
+
+        # Static option overlay: price each hedge option fairly off the path measure
+        # (mean discounted payoff), then learn its quantity jointly with the policy.
+        if self.hedge_options:
+            with torch.no_grad():
+                price_batch = draw(max(batch_size, 20_000))
+                S_T = price_batch[:, -1]
+                disc = math.exp(-self.r * self.T)
+                prices = []
+                for otype, strike in self.hedge_options:
+                    po = (torch.clamp(S_T - strike, min=0.0) if otype == "call"
+                          else torch.clamp(strike - S_T, min=0.0))
+                    prices.append(disc * po.mean())
+                self._hedge_prices = torch.stack(prices)
+            self._opt_qty = nn.Parameter(torch.zeros(len(self.hedge_options)))
+            params.append(self._opt_qty)
+
+        opt = torch.optim.Adam(params, lr=lr)
         self.train_losses = []
         for epoch in range(epochs):
-            paths = self.simulate_paths(batch_size)          # fresh batch each epoch
+            paths = draw(batch_size)                          # fresh batch each epoch
             opt.zero_grad()
-            loss = self._risk(torch, self._pnl(torch, paths, self._policy_holdings(torch, paths)))
+            pnl = self._pnl(torch, paths, self._policy_holdings(torch, paths), opt_qty=self._opt_qty)
+            loss = self._risk(torch, pnl)
             loss.backward()
             opt.step()
             self.train_losses.append(float(loss.item()))
@@ -277,7 +335,8 @@ class DeepHedger:
         if paths is None:
             paths = self.simulate_paths(n_paths, seed=seed)
         with torch.no_grad():
-            return self._pnl(torch, paths, self._policy_holdings(torch, paths)).numpy()
+            holdings = self._policy_holdings(torch, paths)
+            return self._pnl(torch, paths, holdings, opt_qty=self._opt_qty).numpy()
 
     def bs_delta_pnl(self, paths=None, n_paths: int = 50_000, seed: int = SEED) -> np.ndarray:
         """Terminal P&L of the Black-Scholes delta benchmark on the same accounting."""
@@ -287,6 +346,13 @@ class DeepHedger:
             paths = self.simulate_paths(n_paths, seed=seed)
         with torch.no_grad():
             return self._pnl(torch, paths, self._bs_delta_holdings(torch, paths)).numpy()
+
+    def option_quantities(self) -> dict[str, float]:
+        """Learned static quantity held in each hedge option ({} if none)."""
+        if not self.hedge_options or self._opt_qty is None:
+            return {}
+        q = self._opt_qty.detach().numpy()
+        return {f"{ot}@{k:g}": float(q[j]) for j, (ot, k) in enumerate(self.hedge_options)}
 
     def policy_holdings(self, spot, t_step: int = 0, prev_holding=None) -> np.ndarray:
         """

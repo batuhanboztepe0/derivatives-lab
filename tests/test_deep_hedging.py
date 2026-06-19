@@ -124,3 +124,45 @@ def test_all_risk_measures_train(risk: str) -> None:
     assert h.fitted
     assert np.isfinite(h.train_losses[-1])
     assert h.policy_pnl(n_paths=5000, seed=SEED).shape == (5000,)
+
+
+# ── training on an external (zoo-world) path source ───────────────────────────
+
+def test_fit_with_external_paths_fn() -> None:
+    """fit() accepts a paths_fn so the policy can train in a non-GBM world."""
+    h = _hedger(tc=0.0, risk="mean_var")
+    calls = {"n": 0}
+
+    def paths_fn(n):
+        calls["n"] += 1
+        return h.simulate_paths(n)        # plumbing check: any (n, n_steps+1) tensor
+
+    h.fit(epochs=30, batch_size=2048, lr=1e-3, paths_fn=paths_fn)
+    assert calls["n"] == 30                # paths_fn was used every epoch
+    assert h.fitted and np.isfinite(h.train_losses[-1])
+    assert h.policy_pnl(n_paths=4000, seed=SEED).shape == (4000,)
+
+
+# ── static option overlay (gamma hedge) plumbing ──────────────────────────────
+
+def test_option_overlay_plumbing() -> None:
+    """
+    hedge_options adds a static, fairly-priced option overlay whose quantities are
+    learned jointly with the policy and folded into the P&L.  Plumbing only — no
+    risk-reduction claim — checks fair pricing, exposed quantities and P&L wiring.
+    """
+    assert _hedger().option_quantities() == {}        # no overlay → empty
+
+    h = _hedger(tc=0.0, risk="mean_var", hedge_options=[("put", 90.0), ("call", 110.0)])
+    h.fit(epochs=40, batch_size=2048, lr=1e-3)
+
+    prices = h._hedge_prices.numpy()                   # fair value priced per leg
+    assert prices.shape == (2,)
+    assert np.all(prices > 0) and np.all(np.isfinite(prices))
+
+    q = h.option_quantities()                          # learned quantities exposed
+    assert set(q) == {"put@90", "call@110"}
+    assert all(np.isfinite(v) for v in q.values())
+
+    pnl = h.policy_pnl(n_paths=4000, seed=SEED)         # overlay wired into the P&L
+    assert pnl.shape == (4000,) and np.all(np.isfinite(pnl))
