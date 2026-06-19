@@ -446,6 +446,50 @@ def heston_mc(
     }
 
 
+def heston_paths(
+    S: float, T: float, r: float,
+    params: HestonParams,
+    n_paths: int = 20_000,
+    n_steps: int = 50,
+    seed: int = 42,
+) -> np.ndarray:
+    """
+    Full Heston stock-price paths; shape (n_paths, n_steps+1), column 0 = S.
+
+    Log-Euler for the stock with a reflected-Euler variance process, the same
+    stepping as `heston_mc` but storing every step instead of only the terminal
+    value.  Returns S paths only (the variance path is internal).  Antithetic on
+    the correlated Brownian increments.  Used as a "stochastic-vol world" path
+    source for deep hedging — a BS-delta hedger with a single constant σ is
+    misspecified here, which is the whole point of the comparison.
+    """
+    rng = np.random.default_rng(seed)
+    κ, θ, ξ, ρ, v0 = params.kappa, params.theta, params.xi, params.rho, params.v0
+    dt = T / n_steps
+    half = n_paths // 2
+
+    Z1 = rng.standard_normal((half, n_steps))
+    Z2 = rng.standard_normal((half, n_steps))
+    Z2 = ρ * Z1 + np.sqrt(1 - ρ ** 2) * Z2
+    Z1 = np.vstack([Z1, -Z1])
+    Z2 = np.vstack([Z2, -Z2])
+    n = Z1.shape[0]
+
+    S_paths = np.empty((n, n_steps + 1))
+    S_paths[:, 0] = S
+    S_t = np.full(n, float(S))
+    v_t = np.full(n, float(v0))
+
+    for t in range(n_steps):
+        v_pos = np.maximum(v_t, 0.0)
+        dv = κ * (θ - v_pos) * dt + ξ * np.sqrt(v_pos * dt) * Z2[:, t]
+        v_t = np.maximum(v_t + dv, 0.0)
+        S_t = S_t * np.exp((r - 0.5 * v_pos) * dt + np.sqrt(v_pos * dt) * Z1[:, t])
+        S_paths[:, t + 1] = S_t
+
+    return S_paths
+
+
 # ══════════════════════════════════════════════════════════════════
 # Implied vol helper
 # ══════════════════════════════════════════════════════════════════
@@ -689,6 +733,19 @@ class Heston:
     def price_quad(self) -> float:
         """Quadrature (reference) price for this single strike."""
         return heston_price_quad(self.S, self.K, self.T, self.r, self.params)
+
+    def delta(self, h_rel: float = 1e-3) -> float:
+        """
+        Heston call delta by central finite difference of the FFT price.
+
+        No closed form exists; we bump the spot by h = h_rel·S and difference the
+        Carr-Madan price.  This is the model-based hedge ratio (it embeds the
+        stochastic-vol smile), distinct from the constant-σ Black-Scholes delta.
+        """
+        h = self.S * h_rel
+        up = float(heston_price_fft(self.S + h, np.array([self.K]), self.T, self.r, self.params)[0])
+        dn = float(heston_price_fft(self.S - h, np.array([self.K]), self.T, self.r, self.params)[0])
+        return (up - dn) / (2.0 * h)
 
     def price_mc(
         self,
