@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env
+
+# Pytest / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+*.prof
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_meta
+
+# Data cache — never commit raw option chains or price history
+data/cache/
+data/raw/
+*.pkl
+*.parquet
+*.h5
+*.hdf5
+*.feather
+
+# ML artefacts
+models/checkpoints/
+*.pt
+*.pth
+*.onnx
+ml/__pycache__/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local notes / scratch (not part of the project)
+PLAN.md
