@@ -17,7 +17,9 @@ Anchors, from strongest to softest:
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
+import numpy as np
 import pytest
 
 from config import DEFAULT_RISK_FREE_RATE, SEED
@@ -94,3 +96,45 @@ def test_jump_dispersion_raises_otm_call() -> None:
     small = MertonJumpDiffusion(S, 130.0, 0.25, r, sigma, lam=1.0, mu_j=0.0, delta_j=0.05)
     big = MertonJumpDiffusion(S, 130.0, 0.25, r, sigma, lam=1.0, mu_j=0.0, delta_j=0.30)
     assert big.price("call") > small.price("call")
+
+
+# ── (5) full jump-diffusion paths price like the closed form ──────────────────
+
+def test_simulate_paths_match_closed_form() -> None:
+    """
+    Multi-step paths are exact-in-distribution, so the call priced off the
+    terminal column must match the closed form within MC noise, and the
+    discounted terminal must be a martingale (E[e^{-rT} S_T] = S0).
+    """
+    m = _merton(100.0)
+    paths = m.simulate_paths(100_000, n_steps=50, seed=SEED)
+    assert paths.shape == (100_000, 51)
+    S_T = paths[:, -1]
+    assert abs(np.exp(-r * T) * S_T.mean() - S) < 0.3           # martingale
+    mc_call = np.exp(-r * T) * np.maximum(S_T - 100.0, 0.0).mean()
+    assert abs(mc_call - m.price("call")) < 0.15                # vs closed form
+
+
+# ── (6) closed-form delta: λ=0 BS limit + finite-difference anchor ────────────
+
+@pytest.mark.parametrize("K", [90.0, 100.0, 110.0])
+@pytest.mark.parametrize("option_type", ["call", "put"])
+def test_delta_no_jumps_equals_black_scholes(K: float, option_type: str) -> None:
+    """λ=0 leaves only the n=0 term, so the Merton delta must equal the BS delta."""
+    merton = _merton(K, lam=0.0).delta(option_type)
+    bs = BlackScholes(S, K, T, r, sigma).delta(option_type)
+    assert abs(merton - bs) < 1e-12, f"K={K} {option_type}: Merton δ={merton}, BS δ={bs}"
+
+
+@pytest.mark.parametrize("K", [90.0, 100.0, 110.0])
+@pytest.mark.parametrize("option_type", ["call", "put"])
+def test_delta_matches_finite_difference(K: float, option_type: str) -> None:
+    """
+    The closed form is the analytic ∂price/∂S, so a central finite difference of
+    price() must reproduce it to O(h²).  This is the only anchor that exercises
+    the n≥1 terms' σ_n/r_n in the delta sum (the λ=0 limit only checks n=0).
+    """
+    m = _merton(K)
+    h = 0.1
+    fd = (replace(m, S=S + h).price(option_type) - replace(m, S=S - h).price(option_type)) / (2.0 * h)
+    assert abs(m.delta(option_type) - fd) < 1e-5, f"K={K} {option_type}: δ={m.delta(option_type)}, fd={fd}"

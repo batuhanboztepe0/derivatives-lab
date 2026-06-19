@@ -180,6 +180,60 @@ class MertonJumpDiffusion:
 
         return self.S * np.exp(drift + diffusion + jump)
 
+    def delta(self, option_type: OptionType = "call") -> float:
+        """
+        Closed-form Merton delta = Poisson-weighted sum of Black-Scholes deltas.
+
+        Since the per-term weights, variances σ_n and rates r_n do not depend on S,
+        ∂price/∂S = Σ_n w_n · ∂BS_n/∂S = Σ_n w_n · Δ_BS(S, K, T, r_n, σ_n).  This is
+        the jump-adjusted hedge ratio — the model-based benchmark a Merton hedger
+        would use instead of the naive constant-σ Black-Scholes delta.
+        """
+        k = self._k
+        lam_p = self.lam * (1.0 + k)
+        log_lam_p_T = np.log(lam_p * self.T) if lam_p > 0 else -np.inf
+
+        total = 0.0
+        for n in range(self.n_terms):
+            if lam_p > 0:
+                weight = np.exp(-lam_p * self.T + n * log_lam_p_T - lgamma(n + 1))
+            else:
+                weight = 1.0 if n == 0 else 0.0
+            sigma_n = np.sqrt(self.sigma ** 2 + n * self.delta_j ** 2 / self.T)
+            r_n = self.r - self.lam * k + n * np.log1p(k) / self.T
+            total += weight * BlackScholes(self.S, self.K, self.T, r_n, sigma_n).delta(option_type)
+        return float(total)
+
+    def simulate_paths(self, n_paths: int, n_steps: int, seed: int | None = None) -> np.ndarray:
+        """
+        Full jump-diffusion price paths; shape (n_paths, n_steps+1), column 0 = S0.
+
+        Each step adds the exact GBM diffusion increment plus a compound-Poisson
+        jump (a Poisson count of jumps, each log-normal), so the construction is
+        exact-in-distribution for any n_steps — the discretisation only sets the
+        rebalancing grid, not a bias.  Antithetic on the diffusion shocks only;
+        the Poisson jumps are drawn independently.  Used as a "jumpy world" path
+        source for deep hedging.
+        """
+        rng = np.random.default_rng(self.seed if seed is None else seed)
+        k = self._k
+        dt = self.T / n_steps
+        n_half = n_paths // 2
+
+        Z = rng.standard_normal((n_half, n_steps))
+        Z = np.vstack([Z, -Z])                                   # antithetic diffusion
+        n = Z.shape[0]
+        drift = (self.r - self.lam * k - 0.5 * self.sigma ** 2) * dt
+        diffusion = self.sigma * np.sqrt(dt) * Z
+
+        counts = rng.poisson(self.lam * dt, size=(n, n_steps))
+        jumps = rng.normal(counts * self.mu_j, np.sqrt(counts) * self.delta_j)
+
+        log_ret = drift + diffusion + jumps
+        log_path = np.cumsum(log_ret, axis=1)
+        log_path = np.hstack([np.zeros((n, 1)), log_path])
+        return self.S * np.exp(log_path)
+
     def price_mc(self, option_type: OptionType = "call") -> dict[str, float]:
         """
         Monte Carlo price — an independent cross-check on the closed form and the
