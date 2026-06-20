@@ -19,7 +19,8 @@ be honest about where they don't.
   [`research/07_real_gamma_attribution.ipynb`](../research/07_real_gamma_attribution.ipynb) (V4),
   [`research/08_deep_hedge_oos.ipynb`](../research/08_deep_hedge_oos.ipynb) (V5),
   [`research/09_pm_longshot.ipynb`](../research/09_pm_longshot.ipynb) (V6).
-- **V6** uses the **Polymarket** Gamma + CLOB APIs (resolved binary markets), not yfinance.
+- **V6** uses the **SII-WANGZJ/Polymarket_data** HuggingFace dump (`markets.parquet` for outcomes,
+  `trades.parquet` for prices via remote DuckDB), not yfinance.
 
 ## Summary
 
@@ -30,7 +31,7 @@ be honest about where they don't.
 | **V3** ★ | Minimum-variance delta should help **more** on real data than in the synthetic `v₀=θ` world (−4%) | OOS variance reduction **≈49%** (in-sample 54%) | ✅ hypothesis confirmed |
 | **V4** | Delta-only hedge is short gamma; jumps hit it — losses concentrate on big moves | top 5% move days carry **38%** of convexity P&L; |ret|>3% days (2.1%) carry **30%** of Σ(HE²) | ✅ short-gamma bleed real |
 | **V5** | The deep hedger's cost/turnover edge isn't a synthetic artefact | OOS: **−42% turnover**, **+11% CVaR₅** vs BS-delta under 10 bps costs | ✅ cost channel real |
-| **V6** | Prediction-market prices are biased vs realised frequency (Q-vs-P) | longshots (p<0.10) priced **4.3%** resolve **0.7%**; favorites (p>0.90) priced **96%** resolve **100%** | ✅ favorite-longshot bias |
+| **V6** | Prediction-market prices are biased vs realised frequency (Q-vs-P) | **83k markets**: longshots (p<0.10) priced **2.3%** resolve **1.6%**; favorites (p>0.90) priced **96%** resolve **99%**; slope **1.08**, robust across volume tiers & years | ✅ favorite-longshot bias |
 
 ---
 
@@ -122,23 +123,29 @@ stationarity across the split; single horizon, normalised contract, no option bi
 
 ## V6 — Favorite–longshot bias in prediction markets
 
-**Setup.** 636 resolved binary Yes/No **Polymarket** markets (Gamma + CLOB APIs), liquid and
-CLOB-era. For each, a representative pre-resolution YES probability (median of the first 90% of
-its price history) is paired with the realised outcome; markets are binned by price and the
-mean price compared to the realised YES frequency.
+**Setup.** **83,304 resolved binary Yes/No markets (2023–2026)** from the public
+**SII-WANGZJ/Polymarket_data** HuggingFace dump: `markets.parquet` (538k markets) for the
+universe + resolution outcomes, and `trades.parquet` (418M trades) for a pre-resolution YES
+price per market — the median YES-token trade price over the first 90% of each market's trading
+life (dropping the final convergence to 0/1). Prices are pulled by **remote DuckDB** with
+column projection (range reads, no 28 GB download). The live CLOB API was unusable for history:
+it only retains the last ~weeks, so every older market returns nothing.
 
-**Result.** Low-priced longshots are overpriced and heavy favorites underpriced — the classic
-favorite–longshot bias. Longshots (price < 0.10) priced at **4.3%** resolve YES only **0.7%**;
-favorites (price > 0.90) priced at **96%** resolve **100%**. A regression of outcome on price
-gives slope **1.014**, intercept **−0.02** (the realised curve is steeper than the 45° line).
-This is the real-data face of the Q-vs-P wedge: the market price is not an unbiased physical
-probability — demand for cheap, high-payout longshots shades it.
+**Result.** A clean, monotonic favorite–longshot bias across 83k markets: longshots
+(price < 0.10) priced at **2.3%** resolve YES only **1.6%**; favorites (price > 0.90) priced at
+**96.4%** resolve **98.8%**. A regression of outcome on price gives slope **1.08**, intercept
+**−0.007** — the realised curve is steeper than the 45° line (longshots below, favorites above).
+**Robustness:** the slope stays ≈1.07–1.13 across volume tiers ($10k/$50k/$250k) and across every
+resolution year, so it is not an artefact of liquidity or period. This is the real-data face of
+the Q-vs-P wedge: a market price is not an unbiased physical probability — demand for cheap,
+high-payout longshots shades it.
 
-**Caveats.** The dataset is a one-time API snapshot (recently-resolved markets change daily),
-frozen in the cached parquet and these outputs — not reproducible to the same values later.
-The sample is recent, liquid, and skewed toward short-horizon sports/crypto longshots; the bias
-is classically strongest there, so the sign is informative but the magnitude is sample- and
-horizon-dependent. Per-market observations are not independent across time.
+**Caveats.** The representative price is the median YES-token trade over the first 90% of each
+market's life; alternative horizons shift the numbers but not the slope>1 signature (§ robustness).
+The dump is a snapshot through ~May 2026; the derived dataset (~9 MB) is cached and reproducible
+from the public dump + DuckDB. Selection: liquid (>$10k), cleanly-resolved binary Yes/No with ≥5
+YES-token trades. Markets within an event/period are correlated, so binomial error bars understate
+true uncertainty — though the effect is large and monotonic regardless.
 
 ---
 
@@ -149,7 +156,8 @@ option smiles are skewed and fat-tailed (GBM/flat-BS rejected), jumps explain th
 skew better than diffusive stochastic vol, and both the minimum-variance delta and the
 cost-aware deep hedger deliver real, out-of-sample edges that the synthetic worlds had
 understated or could not show. The convexity (gamma) risk a delta hedge cannot touch
-concentrates on the big-move days (V4), and even prediction-market prices carry the textbook
-favorite–longshot bias (V6) — the real-data face of the Q-vs-P wedge. Where the real numbers
-are construction-sensitive (V3's magnitude, V2's λ, V6's snapshot), the direction of the effect
-is robust and the caveats are stated rather than hidden.
+concentrates on the big-move days (V4), and across 83k prediction markets the prices carry the
+textbook favorite–longshot bias (V6) — the real-data face of the Q-vs-P wedge. Where the real
+numbers are construction-sensitive (V3's magnitude, V2's λ), the direction of the effect is
+robust — and V6's bias holds across volume tiers and years — with the caveats stated rather
+than hidden.
