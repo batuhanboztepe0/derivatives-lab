@@ -16,7 +16,10 @@ be honest about where they don't.
 - **Notebooks:** [`research/04_real_smile_calibration.ipynb`](../research/04_real_smile_calibration.ipynb)
   (V1), [`research/05_real_returns_jumps.ipynb`](../research/05_real_returns_jumps.ipynb) (V2),
   [`research/06_mv_delta_hedging.ipynb`](../research/06_mv_delta_hedging.ipynb) (V3),
-  [`research/08_deep_hedge_oos.ipynb`](../research/08_deep_hedge_oos.ipynb) (V5).
+  [`research/07_real_gamma_attribution.ipynb`](../research/07_real_gamma_attribution.ipynb) (V4),
+  [`research/08_deep_hedge_oos.ipynb`](../research/08_deep_hedge_oos.ipynb) (V5),
+  [`research/09_pm_longshot.ipynb`](../research/09_pm_longshot.ipynb) (V6).
+- **V6** uses the **Polymarket** Gamma + CLOB APIs (resolved binary markets), not yfinance.
 
 ## Summary
 
@@ -25,7 +28,9 @@ be honest about where they don't.
 | **V1** | Real option smiles are skewed/fat-tailed; jump & stoch-vol models bend, flat BS can't | Merton IV-RMSE **0.38 vp**, Heston **2.76 vp** (underfits short skew), BS flat **6.16 vp** | ✅ jumps win the short skew |
 | **V2** | Real returns are non-Gaussian (fat tails, left skew); Merton fits | excess kurtosis **15.2**, skew **−0.61**, Jarque–Bera rejects Normal (p≈0), Merton beats Normal by AIC | ✅ GBM rejected |
 | **V3** ★ | Minimum-variance delta should help **more** on real data than in the synthetic `v₀=θ` world (−4%) | OOS variance reduction **≈49%** (in-sample 54%) | ✅ hypothesis confirmed |
+| **V4** | Delta-only hedge is short gamma; jumps hit it — losses concentrate on big moves | top 5% move days carry **38%** of convexity P&L; |ret|>3% days (2.1%) carry **30%** of Σ(HE²) | ✅ short-gamma bleed real |
 | **V5** | The deep hedger's cost/turnover edge isn't a synthetic artefact | OOS: **−42% turnover**, **+11% CVaR₅** vs BS-delta under 10 bps costs | ✅ cost channel real |
+| **V6** | Prediction-market prices are biased vs realised frequency (Q-vs-P) | longshots (p<0.10) priced **4.3%** resolve **0.7%**; favorites (p>0.90) priced **96%** resolve **100%** | ✅ favorite-longshot bias |
 
 ---
 
@@ -81,6 +86,24 @@ correction (which predicts ΔVIX from ΔS) removes a large share — well above 
 (2017) report on **actual** quotes. The robust result is the **large positive sign vs the
 synthetic −4%**, not the exact percentage.
 
+## V4 — Gamma P&L attribution
+
+**Setup.** The V3 rolling ATM 1-month SPY hedge. The delta-hedged residual decomposes as
+`HE = ΔC − δ·ΔS ≈ ½Γ(ΔS)² + θ·dt + vega·Δσ`; attribute it to the convexity term and flag the
+big-move days.
+
+**Result.** The short-gamma P&L is sharply concentrated on the largest moves: the top 5% of
+move-days carry **38%** of the total convexity P&L, and days with |return| > 3% (just **2.1%**
+of days) carry **30%** of the total squared hedging error. The realised-minus-implied gamma
+P&L averages **+1.15** on big-move days versus **−0.09** on calm days. This is the real-data
+counterpart of the synthetic "jumps hit short gamma" result — and why a delta-only hedge needs
+an option (gamma) overlay, not just a better delta.
+
+**Caveats.** The convexity term explains only part of `HE` (corr ≈ 0.5; the rest is the
+vol-move/vega channel that V3 targets) — the robust result is the *concentration* on big-move
+days, not a full decomposition. `|return| > 3%` is a large-move flag, not a formal jump test
+(that is V2). Same VIX-as-IV construction as V3.
+
 ## V5 — Deep hedger out-of-sample
 
 **Setup.** Block-bootstrap of real SPY daily returns (preserving fat tails / clustering),
@@ -97,6 +120,26 @@ improving the tail, and part of the mean-P&L gap rides the bootstrap's upward dr
 clean, drift-independent finding is the **turnover** advantage. Block bootstrap assumes
 stationarity across the split; single horizon, normalised contract, no option bid/ask.
 
+## V6 — Favorite–longshot bias in prediction markets
+
+**Setup.** 636 resolved binary Yes/No **Polymarket** markets (Gamma + CLOB APIs), liquid and
+CLOB-era. For each, a representative pre-resolution YES probability (median of the first 90% of
+its price history) is paired with the realised outcome; markets are binned by price and the
+mean price compared to the realised YES frequency.
+
+**Result.** Low-priced longshots are overpriced and heavy favorites underpriced — the classic
+favorite–longshot bias. Longshots (price < 0.10) priced at **4.3%** resolve YES only **0.7%**;
+favorites (price > 0.90) priced at **96%** resolve **100%**. A regression of outcome on price
+gives slope **1.014**, intercept **−0.02** (the realised curve is steeper than the 45° line).
+This is the real-data face of the Q-vs-P wedge: the market price is not an unbiased physical
+probability — demand for cheap, high-payout longshots shades it.
+
+**Caveats.** The dataset is a one-time API snapshot (recently-resolved markets change daily),
+frozen in the cached parquet and these outputs — not reproducible to the same values later.
+The sample is recent, liquid, and skewed toward short-horizon sports/crypto longshots; the bias
+is classically strongest there, so the sign is informative but the magnitude is sample- and
+horizon-dependent. Per-market observations are not independent across time.
+
 ---
 
 ## Overall
@@ -105,7 +148,8 @@ The synthetic model zoo's qualitative story holds up on real data: real equity r
 option smiles are skewed and fat-tailed (GBM/flat-BS rejected), jumps explain the short-dated
 skew better than diffusive stochastic vol, and both the minimum-variance delta and the
 cost-aware deep hedger deliver real, out-of-sample edges that the synthetic worlds had
-understated or could not show. Where the real numbers are construction-sensitive (V3's
-magnitude, V2's λ), the direction of the effect is robust and the caveats are stated rather
-than hidden. Not covered here: V4 (gamma P&L attribution, optional) and a prediction-markets
-real-data check (V6) requiring non-`yfinance` data.
+understated or could not show. The convexity (gamma) risk a delta hedge cannot touch
+concentrates on the big-move days (V4), and even prediction-market prices carry the textbook
+favorite–longshot bias (V6) — the real-data face of the Q-vs-P wedge. Where the real numbers
+are construction-sensitive (V3's magnitude, V2's λ, V6's snapshot), the direction of the effect
+is robust and the caveats are stated rather than hidden.
