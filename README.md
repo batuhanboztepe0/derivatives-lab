@@ -13,12 +13,12 @@ The full write-up with numbers and caveats is in
 
 | # | Real-data verification | Result |
 |---|---|---|
-| V1 | Implied-vol smile (SPY chain) | Merton (jumps) fits the steep short-dated skew to **0.38 vol pts**; Heston underfits (**2.76**, structural); flat BS misses the wings (**6.16**). |
-| V2 | Fat tails & jumps (10y daily SPY) | excess kurtosis **15.2**, left skew **−0.61**, Jarque–Bera rejects the Normal — GBM rejected. |
-| V3 | Minimum-variance delta (SPY + VIX) | Large OOS hedging-variance reduction vs the synthetic `v₀=θ` baseline of −4% (magnitude inflated by the VIX-as-IV construction; the robust result is the **positive sign**, cf. Hull–White 2017 ~26% on real quotes). |
-| V4 | Gamma P&L attribution | Short-gamma bleed concentrates on big moves: the top 5% move-days carry **38%** of the convexity P&L. |
-| V5 | Deep hedger out-of-sample | On block-bootstrapped real returns, the cost-aware policy trades **~42% less** than BS-delta at comparable tail risk. |
-| V6 | Favorite–longshot bias (83k Polymarket markets) | Longshots (p<0.10) priced **2.3%** resolve **1.6%**; favorites (p>0.90) priced **96%** resolve **99%**; slope **1.08**, robust across volume tiers and years. |
+| V1 | Implied-vol smile (SPY chain) | Merton (jumps) fits the steep short-dated skew to **0.38 vol pts**; Heston underfits (**~2.6**, structural — degenerate even at full DE budget); flat BS misses the wings (**6.16**). An illustration, not a calibrated benchmark. |
+| V2 | Fat tails & jumps (10y daily SPY) | excess kurtosis **15.2**, left skew **−0.61**, Jarque–Bera rejects the Normal — **GBM rejected**; a fat-tailed model (Student-t / jump-mixture) wins by AIC. |
+| V3 | Minimum-variance delta (SPY + VIX) | Positive OOS hedging-variance reduction vs a **0% GBM null** — but ~88% of it is VIX-as-IV leakage, so the **direction** is the result, not the headline 49% (cf. Hull–White 2017 ~26% on real quotes). |
+| V4 | Gamma P&L attribution | Short-gamma bleed concentrates on big moves (top 5% of days = **38%** of convexity P&L) — but a Student-t(6) null gives ~38% too, so this *illustrates* the fat-tail consequence (V2), not jumps. |
+| V5 | Deep hedger out-of-sample | On block-bootstrapped real returns, the cost-aware policy **trades ~42% less** than BS-delta (the clean result); its CVaR₅ is ~11% better but partly bootstrap-drift-aided. |
+| V6 | Favorite–longshot bias (83k Polymarket markets, 2023–2028) | Longshots (p<0.10) priced **2.3%** resolve **1.6%**; favorites (p>0.90) **96%→99%**; slope **1.08**, robust across tiers, deadline years & price measures. |
 
 ## Models
 
@@ -37,16 +37,19 @@ The full write-up with numbers and caveats is in
 ## Setup
 
 ```bash
-make install          # pip install -e ".[all]"   (numpy/scipy/pandas/matplotlib/yfinance + torch)
-make ci               # ruff + mypy + pytest
+make install          # pip install -e ".[all]"   (numpy/scipy/pandas/matplotlib/yfinance + torch + duckdb)
+make ci               # ruff + pytest  (mirrors GitHub Actions)
 ```
 
-Python ≥ 3.10. PyTorch lives in the `[ml]` extra; CI runs the test suite without it
-(torch-dependent tests skip automatically).
+Python ≥ 3.10. PyTorch lives in the `[ml]` extra and `duckdb` in the `[research]` extra (V6
+re-reads the Polymarket trade dump via remote DuckDB on a cache miss); both are folded into
+`[all]`. CI installs `[dev]` only, so the torch-dependent tests skip there automatically.
 
 ## Tests & reproducibility
 
-`pytest` — **98 tests**, anchored on analytic facts (λ=0 Merton collapses to Black–Scholes,
-put–call parity, CRR → BS convergence, finite-difference vs closed-form deltas, discounted-
-martingale checks). Real-data fetches are pinned to dated parquet caches so the notebooks
-re-run offline and deterministically; CI runs only `tests/`, never the data notebooks.
+`pytest` — **110 tests** (100 run in CI; 10 torch-dependent deep-hedging tests need the `ml`
+extra and skip in CI), most anchored on analytic identities (λ=0 Merton collapses to
+Black–Scholes, put–call parity, CRR → BS convergence, finite-difference vs closed-form deltas,
+ξ→0 Heston → BS, discounted-martingale checks). Real-data fetches are pinned to dated parquet
+caches so the notebooks re-run offline and deterministically; CI runs only `tests/`, never the
+data notebooks.
