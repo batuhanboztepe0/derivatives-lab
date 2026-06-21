@@ -6,10 +6,13 @@ data**. Every load-bearing claim made in the synthetic world is verified (or hon
 qualified) on live SPY options, 10 years of SPY/VIX history, and 83k resolved Polymarket
 markets.
 
+![Synthetic claims vs real-data verification](reports/figures/evidence_map.png)
+
 ## Highlights
 
 The full write-up with numbers and caveats is in
-**[`reports/MODEL_ZOO_FINDINGS.md`](reports/MODEL_ZOO_FINDINGS.md)**. In brief:
+**[`reports/MODEL_ZOO_FINDINGS.md`](reports/MODEL_ZOO_FINDINGS.md)** (with embedded figures).
+In brief:
 
 | # | Real-data verification | Result |
 |---|---|---|
@@ -53,3 +56,13 @@ Black–Scholes, put–call parity, CRR → BS convergence, finite-difference vs
 ξ→0 Heston → BS, discounted-martingale checks). Real-data fetches are pinned to dated parquet
 caches so the notebooks re-run offline and deterministically; CI runs only `tests/`, never the
 data notebooks.
+
+## Scope
+
+This is a **verification lab**, not a discovery or a trading strategy. The phenomena tested are
+well-established; the point is to re-derive the models from scratch, then stress-test their
+claims on real data and show honestly where each holds, where its magnitude is construction-
+inflated (V3), and where it is just a fat-tail consequence (V4). It demonstrates engineering +
+research hygiene, not live edge. See the **Limitations & future work** section of
+[`reports/MODEL_ZOO_FINDINGS.md`](reports/MODEL_ZOO_FINDINGS.md) for what more data/time would add
+(multi-date calibration with CIs, real option quotes for V3, cluster-robust SEs for V6).

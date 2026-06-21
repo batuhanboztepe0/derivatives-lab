@@ -6,6 +6,15 @@ load-bearing claims are tested against **real market data**. The goal is not to 
 models but to check that their qualitative predictions survive contact with reality — and to
 be honest about where they don't.
 
+This is a **verification** exercise, not a discovery. The phenomena here — fat tails, the
+jump-driven short skew, the leverage effect, the favorite–longshot bias, the deep-hedge
+turnover saving — are all well-established in the literature. The contribution is the
+rigorous, reproducible re-test on real data and the explicit accounting of where each
+textbook claim holds, where its *magnitude* is inflated by construction, and where it is
+merely a consequence of something simpler.
+
+![Synthetic claims vs real-data verification](figures/evidence_map.png)
+
 ## Method & reproducibility
 
 - **Data:** `yfinance` only (a declared dependency). One dated snapshot per series, taken
@@ -48,6 +57,8 @@ skew builds with maturity, so matching a one-month skew this steep forces a near
 (v₀ pinned at its bound, θ≈0.33) — and 6× the optimiser budget does not lower it, confirming a
 structural short-maturity limit. **Flat BS (6.16 vp)** misses the wings entirely. On real data
 the **jump** mechanism explains the short-dated equity skew better than diffusive stochastic vol.
+
+![Heston skew builds with maturity; Merton's is strongest at short maturity](figures/v1_term_structure.png)
 
 **Caveats.** SPY options are American and the index pays dividends (~1.3%/yr → only a few bp of
 ATM-IV bias over 33 days; we also drop the deep wings). Heston's miss is structural, not an
@@ -109,6 +120,8 @@ tails alone imply:** a Student-t(6) null (≈ SPY's kurtosis) already puts ~38% 
 decomposition* of where a delta hedge bleeds — not independent evidence of jumps (that is V2) —
 which still motivates why a delta-only hedge needs a gamma overlay.
 
+![Convexity P&L concentration vs a fat-tailed null](figures/v4_concentration.png)
+
 **Caveats.** The convexity term explains only part of `HE` (corr ≈ 0.5; the rest is the
 vol-move/vega channel that V3 targets) — the robust result is the *concentration* on big-move
 days, not a full decomposition. `|return| > 3%` is a large-move flag, not a formal jump test
@@ -153,6 +166,8 @@ it is not an artefact of liquidity, period, or price-measure choice. This is the
 the Q-vs-P wedge: a market price is not an unbiased physical probability — demand for cheap,
 high-payout longshots shades it.
 
+![Calibration of 83k Polymarket binary contracts](figures/v6_calibration.png)
+
 **Caveats.** The representative price is the median YES-token trade over the first 90% of each
 market's life; under a first-50% median (slope 1.02) or a first-90% mean (1.14) the slope stays
 ≥1 (§ Robustness) — direction insensitive, magnitude measure-dependent.
@@ -177,6 +192,26 @@ proves; V2's λ reflects fat tails, not rare gaps. The two cleanest, most robust
 longshot bias** across 83k prediction markets (slope ~1.08, stable across liquidity tiers,
 deadline years, and price measures) — the real-data face of the Q-vs-P wedge. Throughout, the
 caveats are stated rather than hidden.
+
+## Limitations & what I'd do with more data and time
+
+These are scope choices, stated plainly rather than hidden:
+
+- **Single-snapshot calibrations (V1, V3, V4).** One dated SPY chain / one rolling option. The
+  honest next step is **multi-date panels with confidence intervals**, so the smile-fit and
+  hedging numbers come with error bars rather than as point estimates.
+- **V3 uses VIX as the option's IV.** That is what inflates the variance-reduction magnitude
+  (~88% leakage). The clean version uses **real traded option quotes** for the IV and the
+  hedging P&L — which is exactly where Hull–White's ~26% comes from; I'd expect this build to
+  land near that figure.
+- **V6 standard errors.** Markets within an event/period are correlated, so the binomial bars
+  are lower bounds. A **cluster-robust / event-level SE** (or a block bootstrap over events)
+  would quantify the true uncertainty on the slope.
+- **V2 jump/diffusion identifiability.** At daily frequency a fat-tailed mixture and a
+  high-σ-plus-jumps fit trade off; a model with **volatility clustering** (GARCH, or Heston
+  with jumps) would separate the two cleanly.
+- **Scope.** This is an educational verification lab — it demonstrates competence and research
+  hygiene, **not a live trading edge or P&L**. No claim of novel alpha is made or intended.
 
 ## References
 
