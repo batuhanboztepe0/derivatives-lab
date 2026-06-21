@@ -56,6 +56,5 @@ Thumbs.db
 *.swp
 *.swo
 
-# Local notes / scratch (not part of the project)
-PLAN.md
-REAL_DATA_VERIFICATION_PLAN.md
+# Local notes / scratch — never published (kept out of the repo entirely)
+_private/
