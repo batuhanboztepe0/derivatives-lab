@@ -30,8 +30,11 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.9",
 ]
+research = [
+    "duckdb>=0.10",   # V6 reads the Polymarket trade dump via remote DuckDB (cache-miss only)
+]
 all = [
-    "derivatives-lab[ml,dev]",
+    "derivatives-lab[ml,dev,research]",
 ]
 
 [project.urls]
@@ -45,6 +48,7 @@ include = ["models*", "backtesting*", "ml*"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+exclude = ["research/"]   # executed notebooks are research artefacts, not linted
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "C4"]

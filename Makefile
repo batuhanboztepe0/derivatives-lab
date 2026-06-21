@@ -16,12 +16,12 @@ lint:
 fmt:
 	ruff format .
 
-## Type-check with mypy
+## Type-check with mypy (advisory; not part of CI — numpy return-typing is noisy)
 typecheck:
 	mypy models/ backtesting/ ml/
 
-## Full CI pipeline (what GitHub Actions runs)
-ci: lint typecheck test
+## Mirror of the GitHub Actions pipeline (ruff + pytest)
+ci: lint test
 
 ## Remove caches and build artefacts
 clean:
