@@ -81,12 +81,12 @@ class TestDupireFlatSurface:
     A flat IV surface σ(K,T) = c implies C(K,T) is exactly the BS call price
     with constant vol c.  Dupire's formula applied to those prices must return c.
 
-    FD truncation error with 0.5% strike bumps and 0.01 T bumps is O(dK²,dT²),
-    so we allow abs tol = 1e-2 (generous; typical error is ~1e-4 for smooth surfaces).
+    FD truncation error with 0.5% strike bumps and 0.01 T bumps is O(dK²,dT²);
+    the measured error on a flat surface is ~3e-5, so abs tol = 1e-3 is comfortable.
     """
 
     FLAT_VOL = 0.25
-    TOL = 1e-2   # FD truncation tolerance
+    TOL = 1e-3   # FD truncation tolerance (measured ~3e-5 on a flat surface)
 
     def _model(self) -> DupireLocalVol:
         return DupireLocalVol(S=S, r=r, iv_surface=lambda K, T: self.FLAT_VOL)

@@ -8,9 +8,9 @@ suite is deterministic and needs no external data.
 
 TOLERANCE NOTES
 ---------------
-- European → Black-Scholes: abs tol = 2e-2.  CRR error is O(1/N) and
-  oscillatory; at N=2000 the measured error is ≤ 4e-4 for standard moneyness,
-  comfortably inside 2e-2.
+- European → Black-Scholes: abs tol = 5e-3.  CRR error is O(1/N) and
+  oscillatory; at N=2000 the measured error is ≤ 1e-3 across standard moneyness,
+  comfortably inside 5e-3.
 - Put-call parity: abs tol = 1e-9.  Parity holds in the discrete CRR model
   *exactly* for any N (up to floating-point round-off), independent of σ or N.
 - American call premium: exactly 0 for a non-dividend call (early exercise is
@@ -33,7 +33,7 @@ T = 1.0
 r = DEFAULT_RISK_FREE_RATE
 sigma = 0.2
 
-BS_TOL = 2e-2      # European CRR vs Black-Scholes at N=2000
+BS_TOL = 5e-3      # European CRR vs Black-Scholes at N=2000 (measured ≤1e-3)
 PARITY_TOL = 1e-9  # discrete put-call parity, any N
 
 
