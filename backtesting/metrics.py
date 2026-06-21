@@ -49,7 +49,7 @@ def sharpe_ratio(returns: ArrayLike, risk_free_rate: float = 0.0) -> float:
     returns = np.asarray(returns, dtype=float)
     rf = risk_free_rate / 252
     excess = returns - rf
-    if excess.std() == 0:
+    if excess.std() < 1e-14:
         return np.nan
     return (excess.mean() / excess.std()) * np.sqrt(252)
 
@@ -66,7 +66,7 @@ def sortino_ratio(returns: ArrayLike, risk_free_rate: float = 0.0) -> float:
     rf = risk_free_rate / 252
     excess = returns - rf
     downside = excess[excess < 0]
-    if len(downside) == 0 or downside.std() == 0:
+    if len(downside) == 0 or downside.std() < 1e-14:
         return np.nan
     return (excess.mean() / downside.std()) * np.sqrt(252)
 
@@ -81,6 +81,8 @@ def max_drawdown(returns: ArrayLike) -> dict[str, float]:
     Returns dict with max_drawdown (negative fraction), peak and trough indices.
     """
     returns = np.asarray(returns, dtype=float)
+    if returns.size == 0:
+        return {"max_drawdown": np.nan, "peak_idx": -1, "trough_idx": -1}
     cum = np.cumprod(1 + returns)
     rolling_max = np.maximum.accumulate(cum)
     drawdowns   = (cum - rolling_max) / rolling_max      # always <= 0
@@ -105,7 +107,9 @@ def calmar_ratio(returns: ArrayLike) -> float:
     about "how much can I lose?" than "what was the average volatility?"
     """
     returns = np.asarray(returns, dtype=float)
-    ann_return = np.mean(returns) * 252
+    if returns.size == 0:
+        return np.nan
+    ann_return = np.prod(1 + returns) ** (252 / len(returns)) - 1   # CAGR (geometric)
     mdd = max_drawdown(returns)["max_drawdown"]
     if mdd == 0:
         return np.nan
