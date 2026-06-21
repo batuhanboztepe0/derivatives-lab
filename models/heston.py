@@ -149,12 +149,11 @@ def _heston_cf(
     """
     Numerically stable Heston characteristic function.
 
-    This is the 'Albrecher fix': choose the square-root branch with Re(d) ≥ 0.
-    When Re(d) < 0, flip the sign. This ensures the complex log in C never
-    crosses its branch cut during numerical integration.
-
-    The fix is algebraically equivalent to the Albrecher et al. (2007)
-    reformulation — it addresses the same branch-cut problem.
+    Branch convention: choose the square-root branch with Re(d) ≥ 0.  This is the
+    *little-trap* `g` formulation (Gatheral 2006 / Albrecher et al. 2007 "little
+    trap"), which keeps the complex log in C on the right branch.  Note the Re(d)≥0
+    flip below is a no-op for equity calibrations (ρ < 0 ⇒ Re(d) ≥ 0 already); it is
+    a guard for the ρ > 0 / wide-grid cases, not the full log-form reformulation.
 
     φ(u) = E^Q[exp(iu · log S_T)] where X = log(S_T)
     """
@@ -223,7 +222,6 @@ def heston_price_quad(
     European call price.
     """
     phi_arr = np.linspace(1e-8, phi_max, n_points)
-    dphi    = phi_arr[1] - phi_arr[0]
     log_K   = np.log(K)
 
     P1_vals, P2_vals = [], []
@@ -241,8 +239,8 @@ def heston_price_quad(
         P1_vals.append(p1)
         P2_vals.append(p2)
 
-    P1 = 0.5 + np.sum(P1_vals) * dphi / np.pi
-    P2 = 0.5 + np.sum(P2_vals) * dphi / np.pi
+    P1 = 0.5 + np.trapz(P1_vals, phi_arr) / np.pi
+    P2 = 0.5 + np.trapz(P2_vals, phi_arr) / np.pi
 
     call = S * P1 - K * np.exp(-r * T) * P2
 
@@ -425,11 +423,25 @@ def heston_mc(
             v_c2 = np.where(U <= p, 0.0,
                             -np.log(np.maximum((1 - U) / (1 - safe_p), 1e-14))
                             / safe_beta)
-            v_t = np.where(psi <= psi_c, v_c1, v_c2)
+            v_new = np.where(psi <= psi_c, v_c1, v_c2)
 
-        # Stock update — log-Euler (always stable)
-        S_t *= np.exp((r - 0.5 * v_pos) * dt
-                      + np.sqrt(np.maximum(v_pos, 0) * dt) * Z1[:, t])
+            # Log-spot coupling (Andersen 2008, central γ=½): inject ρ through the
+            # actual variance increment rather than a separate Brownian — otherwise
+            # the stock and variance are uncorrelated and ρ (the skew driver) is lost.
+            K0  = -ρ * κ * θ * dt / ξ
+            K1  = (κ * ρ / ξ - 0.5) * 0.5 * dt - ρ / ξ
+            K2  = (κ * ρ / ξ - 0.5) * 0.5 * dt + ρ / ξ
+            K34 = 0.5 * (1 - ρ**2) * dt
+            Z_x = rng.standard_normal(n)
+            S_t *= np.exp(r * dt + K0 + K1 * v_pos + K2 * v_new
+                          + np.sqrt(np.maximum(K34 * (v_pos + v_new), 0.0)) * Z_x)
+            v_t = v_new
+
+        # Stock update — euler/milstein use the ρ-correlated shock Z1 (Z2 carries ρ);
+        # qe advanced the stock above via the Andersen variance-increment coupling.
+        if scheme != "qe":
+            S_t *= np.exp((r - 0.5 * v_pos) * dt
+                          + np.sqrt(np.maximum(v_pos, 0) * dt) * Z1[:, t])
 
     payoffs    = np.maximum(S_t - K, 0.0)
     discounted = np.exp(-r * T) * payoffs
