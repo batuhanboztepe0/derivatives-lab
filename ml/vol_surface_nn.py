@@ -44,7 +44,7 @@ NN learns the nonlinear shape from all observed points simultaneously.
 ARCHITECTURE
 ------------
 Input  : [moneyness (K/S), log(T)]   — 2 features
-Hidden : 3 × 64 neurons, ReLU, BatchNorm, Dropout
+Hidden : 3 × 64 neurons, ReLU, Dropout
 Output : 1 scalar — predicted IV at that (K/S, T) point
 
 log(T) instead of T because vol term structure is roughly log-linear.
@@ -207,7 +207,6 @@ class VolSurfaceNN:
         except ImportError:
             raise ImportError("pip install torch") from None
 
-        from sklearn.model_selection import train_test_split
         from sklearn.preprocessing import StandardScaler
 
         X = df[["moneyness", "log_T"]].values.astype(np.float32)
@@ -218,12 +217,8 @@ class VolSurfaceNN:
         X_scaled = self.scaler_X.fit_transform(X).astype(np.float32)
         y_scaled = self.scaler_y.fit_transform(y).astype(np.float32)
 
-        X_train, X_val, y_train, y_val = train_test_split(
-            X_scaled, y_scaled, test_size=0.2, random_state=42
-        )
-
-        X_t = torch.FloatTensor(X_train)
-        y_t = torch.FloatTensor(y_train)
+        X_t = torch.FloatTensor(X_scaled)
+        y_t = torch.FloatTensor(y_scaled)
 
         # Build network dynamically
         layers = []

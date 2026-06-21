@@ -240,7 +240,7 @@ class BlackScholes:
         def objective(sigma):
             return BlackScholes(self.S, self.K, self.T, self.r, sigma).price(option_type) - market_price
         try:
-            if objective(1e-6) * objective(5.0) > 0:
+            if objective(1e-6) * objective(5.0) >= 0:
                 return np.nan
             return optimize.brentq(objective, 1e-6, 5.0, xtol=1e-6, maxiter=200)
         except (ValueError, RuntimeError):
