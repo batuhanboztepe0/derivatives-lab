@@ -25,6 +25,14 @@ def test_max_drawdown_hand_value() -> None:
     assert d["peak_idx"] == 0 and d["trough_idx"] == 1
 
 
+def test_max_drawdown_starting_loss() -> None:
+    # A 50% loss on day one is a real −0.5 drawdown from the t=0 unit NAV.
+    # Regression guard: cumprod alone drops the starting 1.0 and reports 0.0.
+    d = max_drawdown(np.array([-0.5, 0.0, 0.0]))
+    assert abs(d["max_drawdown"] - (-0.5)) < 1e-12
+    assert d["trough_idx"] == 0 and d["peak_idx"] == -1
+
+
 def test_max_drawdown_empty_is_nan() -> None:
     assert np.isnan(max_drawdown(np.array([]))["max_drawdown"])
 

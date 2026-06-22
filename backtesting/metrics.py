@@ -83,7 +83,7 @@ def max_drawdown(returns: ArrayLike) -> dict[str, float]:
     returns = np.asarray(returns, dtype=float)
     if returns.size == 0:
         return {"max_drawdown": np.nan, "peak_idx": -1, "trough_idx": -1}
-    cum = np.cumprod(1 + returns)
+    cum = np.concatenate([[1.0], np.cumprod(1 + returns)])   # prepend the t=0 unit NAV
     rolling_max = np.maximum.accumulate(cum)
     drawdowns   = (cum - rolling_max) / rolling_max      # always <= 0
 
@@ -91,10 +91,11 @@ def max_drawdown(returns: ArrayLike) -> dict[str, float]:
     trough_idx = int(drawdowns.argmin())
     peak_idx   = int(np.argmax(cum[:trough_idx + 1]))
 
+    # shift indices back to the returns axis (-1 = the pre-first-return starting NAV)
     return {
         "max_drawdown": max_dd,
-        "peak_idx":     peak_idx,
-        "trough_idx":   trough_idx,
+        "peak_idx":     peak_idx - 1,
+        "trough_idx":   trough_idx - 1,
     }
 
 
