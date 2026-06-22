@@ -85,3 +85,19 @@ def test_calibrator_round_trip() -> None:
     assert cal.fit_quality(S0, K, Tn, mivs)["rmse"] < 1e-2          # recovers a tight fit
     assert rec.rho < -0.3                                           # equity skew sign
     assert abs(np.sqrt(rec.theta) - np.sqrt(true.theta)) < 0.07     # long-run vol ballpark
+
+
+def test_model_ivs_preserves_input_order() -> None:
+    """_model_ivs must align IVs to input (strike, expiry) rows, not to sorted expiries.
+
+    Regression guard: np.unique(expiries) sorts, so the old append order misaligned with
+    market_ivs for any unsorted multi-expiry surface. V1 was safe (single expiry)."""
+    cal = HestonCalibrator(r=r)
+    p = np.array([2.0, 0.04, 0.5, -0.7, 0.04])        # kappa, theta, xi, rho, v0
+    strikes  = np.array([90.0, 110.0, 95.0, 105.0])
+    expiries = np.array([0.5, 0.1, 0.5, 0.1])          # unsorted, interleaved
+    base = cal._model_ivs(p, S0, strikes, expiries)
+    perm = np.array([2, 0, 3, 1])
+    permd = cal._model_ivs(p, S0, strikes[perm], expiries[perm])
+    # order-equivariance: permuting input rows permutes the output the same way
+    assert np.allclose(permd, base[perm], atol=1e-10)

@@ -575,19 +575,23 @@ class HestonCalibrator:
         except ValueError:
             return np.full(len(strikes), np.nan)
 
-        ivs = []
+        # Fill by boolean mask so the output stays in input (strike, expiry) order.
+        # np.unique sorts the expiries, so appending would misalign with market_ivs.
+        ivs = np.empty(len(strikes), dtype=float)
         for T_exp in np.unique(expiries):
             mask = expiries == T_exp
             K_sub = strikes[mask]
             try:
                 prices = heston_price_fft(S, K_sub, T_exp, self.r, params)
+                sub = []
                 for price, K in zip(prices, K_sub, strict=False):
                     iv = heston_implied_vol(price, S, K, T_exp, self.r)
-                    ivs.append(iv if (iv is not None and not np.isnan(iv)) else 0.5)
+                    sub.append(iv if (iv is not None and not np.isnan(iv)) else 0.5)
+                ivs[mask] = sub
             except Exception:
-                ivs.extend([0.5] * mask.sum())
+                ivs[mask] = 0.5
 
-        return np.array(ivs)
+        return ivs
 
     def _loss(
         self,
