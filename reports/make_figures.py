@@ -40,12 +40,12 @@ def _miss():
 def fig_evidence_map() -> None:
     """Synthetic claim → real-data verdict, one row per verification (the project anchor)."""
     rows = [
-        ("V1  smile / skew", "Merton (jumps) fits short skew 0.38vp;\nHeston underfits 2.6vp; flat BS 6.2vp", GREEN),
+        ("V1  smile / skew", "Merton (jumps) fits short skew 0.52vp;\nHeston underfits 1.7vp; flat BS 4.5vp", GREEN),
         ("V2  fat tails", "excess kurtosis 15.2, GBM rejected\n(Student-t/jump-mix beats Normal by AIC)", GREEN),
         ("V3  MV-delta", "positive vs 0% GBM null; magnitude\ninflated by VIX-as-IV (~88% leakage)", AMBER),
         ("V4  gamma P&L", "concentrates on big moves (38%) —\n= fat-tail null, illustrative not jumps", AMBER),
-        ("V5  deep hedge OOS", "−42% turnover vs BS-delta (clean);\nCVaR +11% (drift-aided, secondary)", GREEN),
-        ("V6  longshot bias", "83k markets: slope 1.08, robust across\ntiers/years/measures — Q-vs-P wedge", GREEN),
+        ("V5  deep hedge OOS", "−42% turnover, CI [0.56,0.62] (clean);\nCVaR gain not robust (drift-aided)", GREEN),
+        ("V6  longshot bias", "83k markets: slope 1.08 > 1 across tiers/years\n(cluster-robust); longshot side measure-sensitive", GREEN),
     ]
     fig, ax = plt.subplots(figsize=(11, 6.2))
     ax.axis("off")
@@ -166,7 +166,7 @@ def fig_v6_calibration() -> None:
     ax.set_xlabel("market price (implied YES probability)")
     ax.set_ylabel("realised YES frequency")
     ax.set_title("V6 — favorite–longshot bias on Polymarket (2023–2028)\n"
-                 "slope 1.08 > 1, robust across tiers/years/measures")
+                 "slope 1.08 > 1 across tiers and years (cluster-robust)")
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.set_aspect("equal")

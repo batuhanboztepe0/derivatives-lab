@@ -35,12 +35,12 @@ merely a consequence of something simpler.
 
 | # | Synthetic claim | Real-data result | Verdict |
 |---|---|---|---|
-| **V1** | Real option smiles are skewed/fat-tailed; jump & stoch-vol models bend, flat BS can't | Merton IV-RMSE **0.38 vp**, Heston **~2.6 vp** (underfits even at full DE budget — degenerate params), BS flat **6.16 vp** | ✅ jumps win the short skew (illustration) |
+| **V1** | Real option smiles are skewed/fat-tailed; jump & stoch-vol models bend, flat BS can't | Merton IV-RMSE **0.52 vp**, Heston **1.67 vp** (underfits even at full DE budget, degenerate params), BS flat **4.49 vp**, all on 77 strikes | ✅ jumps win the short skew (illustration) |
 | **V2** | Real returns are non-Gaussian (fat tails, left skew) | excess kurtosis **15.2**, skew **−0.61**, Jarque–Bera rejects Normal (p≈0); a fat-tailed model (Student-t / jump-mixture) beats Normal by AIC | ✅ GBM rejected |
 | **V3** ★ | Minimum-variance delta should help where real spot-vol leverage exists (synthetic null **0%**) | OOS variance reduction **≈49%** — but ~88% of it is VIX-as-IV leakage; vs **0%** GBM null and Hull–White 2017 **~26%** on real quotes | ✅ direction; magnitude inflated |
 | **V4** | Delta-only hedge is short gamma; losses concentrate on big moves | top 5% move-days carry **38%** of convexity P&L — but a Student-t(6) null already gives ~38% | ✅ illustrative (not jump evidence → V2) |
-| **V5** | The deep hedger's cost/turnover edge isn't a synthetic artefact | OOS **−42% turnover** (clean); CVaR₅ **+11%** but drift-aided | ✅ cost/turnover channel real |
-| **V6** | Prediction-market prices are biased vs realised frequency (Q-vs-P) | **83k markets (2023–2028)**: longshots (p<0.10) priced **2.3%** resolve **1.6%**; favorites (p>0.90) **96%→99%**; slope **1.08**, robust across tiers, years & price measures | ✅ favorite-longshot bias |
+| **V5** | The deep hedger's cost/turnover edge isn't a synthetic artefact | OOS **−42% turnover** (ratio 0.58, 95% CI [0.56, 0.62], clean); CVaR₅ +11% point estimate but not robust (drift-aided) | ✅ cost/turnover channel real |
+| **V6** | Prediction-market prices are biased vs realised frequency (Q-vs-P) | **83k markets (2023–2028)**: longshots (p<0.10) priced **2.3%** resolve **1.6%**; favorites (p>0.90) **96%→99%**; slope **1.08** (cluster-robust, 95% CI [1.07, 1.10]) > 1 across tiers and years; longshot side measure-sensitive | ✅ favorite-longshot bias |
 
 ---
 
@@ -50,20 +50,21 @@ merely a consequence of something simpler.
 moneyness ∈ [0.85, 1.15]. Fit Merton `(σ,λ,μ_J,δ_J)` by least squares on IV; calibrate Heston
 `(κ,θ,ξ,ρ,v₀)` with `HestonCalibrator`; flat BS pinned at ATM IV.
 
-**Result.** The real 33-day smile is steep and downward-skewed (slope ≈ −0.92). **Merton fits
-it tightly (0.38 vol pts)** with λ≈0.89/yr and a mean down-jump ≈ −15%. **Heston bends the
-right way (ρ≈−0.80) but underfits (~2.6 vol pts even at the full DE budget):** its diffusive
-skew builds with maturity, so matching a one-month skew this steep forces a near-degenerate fit
-(v₀ pinned at its bound, θ≈0.33) — and 6× the optimiser budget does not lower it, confirming a
-structural short-maturity limit. **Flat BS (6.16 vp)** misses the wings entirely. On real data
-the **jump** mechanism explains the short-dated equity skew better than diffusive stochastic vol.
+**Result.** The real 33-day smile is steep and downward-skewed (slope ≈ −0.88), fit on all 77
+liquid strikes. **Merton fits it tightly (0.52 vol pts)** with λ≈0.96/yr and a mean down-jump
+≈ −14%. **Heston bends the right way (ρ≈−0.82) but underfits (1.67 vol pts at the full DE
+budget):** its diffusive skew builds with maturity, so matching a one-month skew this steep forces
+a near-degenerate fit (v₀ pinned at its bound, θ≈0.28). The full DE budget does not lower it,
+confirming a structural short-maturity limit. **Flat BS (4.49 vp)** misses the wings entirely. On
+real data the **jump** mechanism explains the short-dated equity skew better than diffusive
+stochastic vol.
 
 ![Heston skew builds with maturity; Merton's is strongest at short maturity](figures/v1_term_structure.png)
 
 **Caveats.** SPY options are American and the index pays dividends (~1.3%/yr → only a few bp of
 ATM-IV bias over 33 days; we also drop the deep wings). Heston's miss is structural, not an
-optimiser failure (verified at full DE budget). This is an **illustration** — one snapshot, one
-expiry, 14 strikes, Merton fits 4 params to 14 IV points, no CIs — not a calibrated benchmark.
+optimiser failure (verified at full DE budget). This is an **illustration**: one snapshot, one
+expiry, 77 strikes, Merton fits 4 params to 77 IV points, no CIs, not a calibrated benchmark.
 
 ## V2 — Fat tails & jumps in returns
 
@@ -134,11 +135,12 @@ split into in-sample (train) and out-of-sample (eval) halves. Train a CVaR(5%) c
 deep hedger on in-sample blocks via `DeepHedger.fit(paths_fn=...)`; evaluate OOS against
 BS-delta on identical accounting, frictionless and at 10 bps.
 
-**Result.** OOS with costs, the cost-aware policy **trades ~42% less** (turnover ratio 0.58) —
-the clean, drift-independent result and the headline. Its CVaR₅ is ~11% better too, but that is
-**secondary and drift-aided**: the OOS bootstrap paths drift +3.9% over 50 steps, so the policy
-leans long. The cost/turnover channel from the synthetic work **survives out-of-sample on real
-return dynamics**.
+**Result.** OOS with costs, the cost-aware policy **trades ~42% less** (turnover ratio 0.58,
+95% CI **[0.56, 0.62]** over OOS-block bootstraps): the clean, drift-independent result and the
+headline. Its CVaR₅ point estimate is ~11% better, but that is **secondary and not robust**: it is
+positive in only 43% of OOS-block bootstraps and rides the bootstrap drift (+3.9% over 50 steps, so
+the policy leans long). The cost/turnover channel from the synthetic work **survives out-of-sample
+on real return dynamics**.
 
 **Caveats.** The CVaR objective is not variance: the policy shows higher *central* std while
 improving the tail, and part of the mean-P&L gap rides the bootstrap's upward drift — so the
@@ -159,18 +161,23 @@ it only retains the last ~weeks, so every older market returns nothing.
 (price < 0.10) priced at **2.3%** resolve YES only **1.6%**; favorites (price > 0.90) priced at
 **96.4%** resolve **98.8%**. A regression of outcome on price gives slope **1.08**, intercept
 **−0.007** — the realised curve is steeper than the 45° line (longshots below, favorites above).
-**Robustness:** the slope stays ≈1.06–1.13 across volume tiers ($10k/$50k/$250k) and across every
-**deadline year**; under alternative pre-resolution price measures it is **1.02** (median, first
-50% of life) to **1.14** (mean, first 90%) — direction insensitive, only the magnitude shifts. So
-it is not an artefact of liquidity, period, or price-measure choice. This is the real-data face of
-the Q-vs-P wedge: a market price is not an unbiased physical probability — demand for cheap,
+**Robustness.** The slope stays above 1 across volume tiers ($10k/$50k/$250k), across every
+deadline year, and under all three pre-resolution price measures: **1.02** (median, first 50% of
+life), **1.08** (median, first 90%, the headline), **1.14** (mean, first 90%). A cluster-robust
+SE over event groups gives slope **1.08 ± 0.01**, 95% CI **[1.07, 1.10]**, so the bias is not a
+sampling artefact. The aggregate bias is measure-insensitive and favorite-driven. The longshot
+side specifically is small and measure-sensitive: the p<0.10 bucket is overpriced under the
+first-90% measures (priced 2.3%, realised 1.6%) but roughly calibrated under the first-50% median
+(priced 2.9%, realised 3.4%). The robust result is the slope above 1. This is the real-data face
+of the Q-vs-P wedge: a market price is not an unbiased physical probability, and demand for cheap,
 high-payout longshots shades it.
 
 ![Calibration of 83k Polymarket binary contracts](figures/v6_calibration.png)
 
 **Caveats.** The representative price is the median YES-token trade over the first 90% of each
-market's life; under a first-50% median (slope 1.02) or a first-90% mean (1.14) the slope stays
-≥1 (§ Robustness) — direction insensitive, magnitude measure-dependent.
+market's life. Under a first-50% median (slope 1.02) or a first-90% mean (1.14) the slope stays
+above 1 (§ Robustness), so the aggregate bias holds, but the longshot bucket's sign is
+measure-dependent: overpriced under the 90% measures, about calibrated under the 50% median.
 The dump is a snapshot through ~May 2026; the derived dataset (~9 MB) is cached and reproducible
 from the public dump + DuckDB. Selection: liquid (>$10k), cleanly-resolved binary Yes/No with ≥5
 YES-token trades. Markets within an event/period are correlated, so binomial error bars understate
@@ -189,24 +196,28 @@ by the VIX-as-IV construction (~88% leakage; cf. Hull–White ~26%); V4's gamma-
 what fat tails already imply (a Student-t null reproduces the 38%), so it illustrates rather than
 proves; V2's λ reflects fat tails, not rare gaps. The two cleanest, most robust results are
 **V5's ~42% lower turnover** (the cost-aware deep hedger, out-of-sample) and **V6's favorite–
-longshot bias** across 83k prediction markets (slope ~1.08, stable across liquidity tiers,
-deadline years, and price measures) — the real-data face of the Q-vs-P wedge. Throughout, the
+longshot bias** across 83k prediction markets (slope ~1.08, cluster-robust 95% CI [1.07, 1.10],
+stable across liquidity tiers and deadline years; the longshot side is measure-sensitive). This is
+the real-data face of the Q-vs-P wedge. Throughout, the
 caveats are stated rather than hidden.
 
 ## Limitations & what I'd do with more data and time
 
 These are scope choices, stated plainly rather than hidden:
 
-- **Single-snapshot calibrations (V1, V3, V4).** One dated SPY chain / one rolling option. The
-  honest next step is **multi-date panels with confidence intervals**, so the smile-fit and
-  hedging numbers come with error bars rather than as point estimates.
+- **Single-snapshot calibrations (V1, V3, V4).** One dated SPY chain, one rolling option. The
+  honest next step is **multi-date panels with bootstrap confidence intervals**, so the smile-fit
+  and hedging numbers carry error bars rather than point estimates. This is out of scope here for a
+  data reason: only one option-quote date is available, and a daily history needs a paid feed
+  (OptionMetrics or similar). V1 is reported as an illustration, not a calibrated benchmark.
 - **V3 uses VIX as the option's IV.** That is what inflates the variance-reduction magnitude
   (~88% leakage). The clean version uses **real traded option quotes** for the IV and the
   hedging P&L — which is exactly where Hull–White's ~26% comes from; I'd expect this build to
   land near that figure.
-- **V6 standard errors.** Markets within an event/period are correlated, so the binomial bars
-  are lower bounds. A **cluster-robust / event-level SE** (or a block bootstrap over events)
-  would quantify the true uncertainty on the slope.
+- **V6 standard errors.** Markets within an event/period are correlated, so the binomial bars are
+  lower bounds. The notebook now reports a **cluster-robust SE** (event-level bootstrap): slope
+  1.08 ± 0.01, 95% CI [1.07, 1.10], t = 11 versus the null of 1.0. A fuller hierarchical event
+  model would refine it.
 - **V2 jump/diffusion identifiability.** At daily frequency a fat-tailed mixture and a
   high-σ-plus-jumps fit trade off; a model with **volatility clustering** (GARCH, or Heston
   with jumps) would separate the two cleanly.
