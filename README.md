@@ -29,7 +29,7 @@ In brief:
   closed form + paths), `heston` (Carr–Madan FFT + quadrature + QE Monte Carlo + DE
   calibrator), `binomial` (CRR, American early exercise), `monte_carlo` (GBM, antithetic,
   exotics), `local_vol` (CEV + Dupire), `pde_solver` (Crank–Nicolson).
-- **`ml/`** — `vol_surface_nn` (SVI-inspired surface fit + yfinance fetcher),
+- **`ml/`** — `vol_surface_nn` (small MLP fit to a hand-specified skew/term-structure surface + yfinance fetcher),
   `deep_hedging` (PyTorch policy, mean-variance / entropic / CVaR risk, transaction costs,
   external path sources, option overlay).
 - **`backtesting/`** — Sharpe, Sortino, max drawdown, summary metrics.

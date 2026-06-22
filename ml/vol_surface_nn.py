@@ -52,16 +52,11 @@ log(T) instead of T because vol term structure is roughly log-linear.
 
 from __future__ import annotations
 
-import warnings
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 from models.black_scholes import BlackScholes
-
-warnings.filterwarnings("ignore")
-
 
 # ------------------------------------------------------------------
 # Data: fetch real vol surface from yfinance
@@ -91,7 +86,7 @@ def fetch_vol_surface(ticker: str = "AAPL", r: float = 0.0438) -> pd.DataFrame:
 
     for expiry in stock.options:
         try:
-            chain = stock.option_chain(expiry).calls
+            chain = stock.option_chain(expiry).calls   # calls only; OTM puts (where the left skew lives) are not fetched
             chain = chain[(chain["bid"] > 0) & (chain["ask"] > 0) & (chain["volume"] > 10)]
             T = (datetime.strptime(expiry, "%Y-%m-%d") - datetime.today()).days / 365
 
@@ -130,7 +125,7 @@ def simulate_vol_surface(n_points: int = 500, seed: int = 42) -> pd.DataFrame:
     """
     Simulate a realistic vol surface when live data is unavailable.
 
-    Uses a simplified SVI-inspired shape:
+    Uses a hand-specified skew + smile + term-structure shape (not a calibrated SVI):
       IV(k, T) = ATM_vol + skew×k + smile×k² + term_structure×√T
     where k = log(moneyness) = log(K/S)
 
@@ -145,7 +140,7 @@ def simulate_vol_surface(n_points: int = 500, seed: int = 42) -> pd.DataFrame:
     T         = rng.uniform(0.05, 1.0, n_points)
     k         = np.log(moneyness)               # log-moneyness
 
-    # SVI-inspired surface shape
+    # hand-specified surface shape
     atm_vol       = 0.20
     skew          = -0.15    # negative = put skew (left side higher)
     smile         =  0.30    # curvature
