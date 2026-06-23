@@ -15,6 +15,7 @@ dependencies = [
     "numpy>=1.26",
     "scipy>=1.12",
     "pandas>=2.2",
+    "pyarrow>=14",      # parquet engine for the data/fetcher.py cache (df.to_parquet / read_parquet)
     "matplotlib>=3.8",
     "yfinance>=0.2.36",
 ]
