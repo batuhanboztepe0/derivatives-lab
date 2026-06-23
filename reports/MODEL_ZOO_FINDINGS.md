@@ -117,7 +117,10 @@ move-days carry **38%** of the total convexity P&L, and days with |return| > 3% 
 of days) carry **30%** of the total squared hedging error. The realised-minus-implied gamma
 P&L averages **+1.15** on big-move days versus **−0.09** on calm days. **But this is what fat
 tails alone imply:** a Student-t(6) null already puts ~38% in the top 5%
-(Gaussian ~28%), so the observed 38% lands on the fat-tailed null. Read V4 as an *illustrative
+(Gaussian ~28%), so the observed 38% lands on the fat-tailed null. Matching SPY's actual excess
+kurtosis of 15.2 needs a heavier Student-t (ν≈4.4), which puts ~44% in the top 5%, so the observed
+38% sits at or below a kurtosis-matched null and fat tails fully account for the concentration.
+Read V4 as an *illustrative
 decomposition* of where a delta hedge bleeds — not independent evidence of jumps (that is V2) —
 which still motivates why a delta-only hedge needs a gamma overlay.
 
@@ -131,7 +134,7 @@ days, not a full decomposition. `|return| > 3%` is a large-move flag, not a form
 ## V5 — Deep hedger out-of-sample
 
 **Setup.** Block-bootstrap of real SPY daily returns (preserving fat tails / clustering),
-split into in-sample (train) and out-of-sample (eval) halves. Train a CVaR(5%) cost-aware
+split 60/40 into in-sample (train, 1507 days) and out-of-sample (eval, 1006 days). Train a CVaR(5%) cost-aware
 deep hedger on in-sample blocks via `DeepHedger.fit(paths_fn=...)`; evaluate OOS against
 BS-delta on identical accounting, frictionless and at 10 bps.
 

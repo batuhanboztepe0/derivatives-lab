@@ -279,7 +279,7 @@ def heston_price_fft(
     for a grid of N log-strikes, then interpolates at requested strikes.
 
     Complexity: O(N log N) vs O(N × n_quad) for pointwise integration.
-    For N=50 strikes: ~500× speedup over quadrature — essential for calibration.
+    For N=50 strikes: ~80× speedup over quadrature (measured), essential for calibration.
 
     Parameters
     ----------
@@ -364,22 +364,25 @@ def heston_mc(
                rule between exponential and exponential-mixture approximations.
                No negativity issue, correct moments. Production standard.
 
-    Uses antithetic variates (simulate Z and −Z) to halve variance at zero cost.
+    The euler and milstein schemes use antithetic variates (simulate Z and −Z) to
+    reduce variance at near-zero cost; the qe scheme draws its own independent
+    normals at each step, so it does not allocate them.
     """
     rng = np.random.default_rng(seed)
     κ, θ, ξ, ρ, v0 = params.kappa, params.theta, params.xi, params.rho, params.v0
     dt   = T / n_steps
     half = n_sims // 2
+    n    = 2 * half
 
-    # Correlated Brownian increments
-    Z1 = rng.standard_normal((half, n_steps))
-    Z2 = rng.standard_normal((half, n_steps))
-    Z2 = ρ * Z1 + np.sqrt(1 - ρ**2) * Z2
-
-    # Antithetic pairs
-    Z1 = np.vstack([Z1, -Z1])
-    Z2 = np.vstack([Z2, -Z2])
-    n  = 2 * half
+    # Antithetic correlated Brownian increments. Only euler/milstein read these;
+    # the qe scheme draws its own independent normals inside the loop, so we skip
+    # the (n_sims x n_steps) allocation for it.
+    if scheme != "qe":
+        Z1 = rng.standard_normal((half, n_steps))
+        Z2 = rng.standard_normal((half, n_steps))
+        Z2 = ρ * Z1 + np.sqrt(1 - ρ**2) * Z2
+        Z1 = np.vstack([Z1, -Z1])
+        Z2 = np.vstack([Z2, -Z2])
 
     S_t = np.full(n, float(S))
     v_t = np.full(n, float(v0))

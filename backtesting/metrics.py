@@ -56,19 +56,23 @@ def sharpe_ratio(returns: ArrayLike, risk_free_rate: float = 0.0) -> float:
 
 def sortino_ratio(returns: ArrayLike, risk_free_rate: float = 0.0) -> float:
     """
-    Sortino = (mean return - rf) / downside_std, annualised.
+    Sortino = (mean return - rf) / downside_deviation, annualised.
 
-    Only penalises negative returns. More appropriate for options:
+    Downside deviation is the root-mean-square shortfall below the target (here
+    the risk-free rate), averaged over ALL periods. This is the canonical
+    target-downside-deviation, not the std of the negative-return subset.
+    Only penalises returns below target. More appropriate for options:
     a strategy with large gains and small losses should score well here,
     even if total vol is high.
     """
     returns = np.asarray(returns, dtype=float)
     rf = risk_free_rate / 252
     excess = returns - rf
-    downside = excess[excess < 0]
-    if len(downside) == 0 or downside.std() < 1e-14:
+    shortfall = np.minimum(excess, 0.0)
+    downside_dev = np.sqrt(np.mean(shortfall**2))
+    if downside_dev < 1e-14:
         return np.nan
-    return (excess.mean() / downside.std()) * np.sqrt(252)
+    return (excess.mean() / downside_dev) * np.sqrt(252)
 
 
 def max_drawdown(returns: ArrayLike) -> dict[str, float]:

@@ -47,9 +47,11 @@ def test_sharpe_zero_mean_is_zero() -> None:
 
 
 def test_sortino_hand_value() -> None:
-    # downside = [−0.01, −0.03]; std(ddof0)=0.01; mean=0.005 ⇒ sortino = 0.5·√252
+    # excess = [0.02, −0.01, −0.03, 0.04]; shortfall = [0, −0.01, −0.03, 0]
+    # downside_dev = √(mean[0, 1e-4, 9e-4, 0]) = √2.5e-4; mean = 0.005
+    # ⇒ sortino = (0.005 / √2.5e-4)·√252 = √0.1·√252
     val = sortino_ratio(np.array([0.02, -0.01, -0.03, 0.04]))
-    assert abs(val - 0.5 * np.sqrt(252)) < 1e-6
+    assert abs(val - np.sqrt(0.1) * np.sqrt(252)) < 1e-6
 
 
 def test_calmar_uses_geometric_cagr() -> None:
