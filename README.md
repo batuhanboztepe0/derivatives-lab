@@ -34,7 +34,7 @@ In brief:
   external path sources, option overlay).
 - **`backtesting/`**: Sharpe, Sortino, max drawdown, summary metrics.
 - **`data/`**: `fetcher` (cache-first market-data pulls; cache is gitignored).
-- **`research/`**: executed notebooks `04`–`09` (the V1–V6 verifications above).
+- **`research/`**: executed notebooks `04`–`09` (the V1–V6 verifications above). Notebooks `01`–`03` cover the synthetic model-building stage and are not included in this public repo.
 - **`tests/`**: analytic-anchor unit tests.
 
 ## Setup
