@@ -27,9 +27,14 @@ def test_european_within_3se_of_black_scholes() -> None:
 
 
 def test_barrier_in_plus_out_equals_vanilla() -> None:
-    """down-and-in + down-and-out (same barrier, same seed → same paths) reconstruct the vanilla."""
-    mc = MonteCarlo(S=S, K=K, T=T, r=r, sigma=sigma, n_sims=200_000)
+    """down-and-in + down-and-out (same barrier, same seed → same paths) reconstruct the vanilla.
+
+    Monitored intraday (n_steps=252) so the knock-in is non-trivial: with n_steps=1 the
+    barrier is only seen at expiry, where a down-and-in call (needs S_T > K > barrier) can
+    never activate and the identity would hold vacuously."""
+    mc = MonteCarlo(S=S, K=K, T=T, r=r, sigma=sigma, n_sims=100_000, n_steps=252)
     vanilla = mc.price_european("call")["price"]
     ki = mc.price_barrier(80.0, "down-and-in", "call")["price"]
     ko = mc.price_barrier(80.0, "down-and-out", "call")["price"]
+    assert ki > 0.0, f"knock-in never activates (KI={ki}); barrier monitoring is trivial"
     assert abs((ki + ko) - vanilla) < 1e-9, f"KI+KO={ki + ko:.6f} vanilla={vanilla:.6f}"

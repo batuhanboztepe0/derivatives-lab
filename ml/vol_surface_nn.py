@@ -43,11 +43,18 @@ NN learns the nonlinear shape from all observed points simultaneously.
 
 ARCHITECTURE
 ------------
-Input  : [moneyness (K/S), log(T)]   — 2 features
+Input  : [moneyness (K/S), log(T)]   (2 features)
 Hidden : 3 × 64 neurons, ReLU, Dropout
-Output : 1 scalar — predicted IV at that (K/S, T) point
+Output : 1 scalar, predicted IV at that (K/S, T) point
 
 log(T) instead of T because vol term structure is roughly log-linear.
+
+DATA NOTE
+---------
+The bundled demo (run as __main__) fits this network to a hand-specified synthetic
+surface from simulate_vol_surface(). The real-data path fetch_vol_surface() pulls a
+live option chain, but VolSurfaceNN is demonstrated on the synthetic surface here,
+not fit to market quotes.
 """
 
 from __future__ import annotations

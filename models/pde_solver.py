@@ -33,16 +33,17 @@ The θ-scheme averages levels n and n+1 with weight θ (implicit) and
 
 where L[V]_i = ½σ²S_i²(V_{i+1}−2V_i+V_{i-1})/dS² + rS_i(V_{i+1}−V_{i-1})/(2dS) − rV_i.
 
-Define per-node coefficients (lowercase = scalar):
+Define per-node raw coefficients (lowercase = scalar, before the θ weighting):
 
-    a_i = ½·θ·( ½σ²S_i²/dS² − rS_i/(2dS) )   # sub-diagonal weight
-    c_i = ½·θ·( ½σ²S_i²/dS² + rS_i/(2dS) )   # super-diagonal weight
-    b_i = 1/dt + θ·( σ²S_i²/dS² + r )         # diagonal weight
+    A_i = ½σ²S_i²/dS² − rS_i/(2dS)   # sub-diagonal
+    C_i = ½σ²S_i²/dS² + rS_i/(2dS)   # super-diagonal
+    B_i = σ²S_i²/dS² + r             # diagonal
 
-The linear system at each time step is:
-    −a_i·V_{i-1}^{n+1} + b_i·V_i^{n+1} − c_i·V_{i+1}^{n+1} = RHS_i
+The implicit system at each time step weights these by θ:
+    −θ·A_i·V_{i-1}^{n+1} + (1/dt + θ·B_i)·V_i^{n+1} − θ·C_i·V_{i+1}^{n+1} = RHS_i
 
-where the explicit RHS uses the same coefficients with (1−θ)/θ scaling.
+where the explicit RHS uses the same raw coefficients with the complementary
+weight (1−θ):  RHS_i = (1/dt − (1−θ)·B_i)·V_i^n + (1−θ)·A_i·V_{i-1}^n + (1−θ)·C_i·V_{i+1}^n.
 
 WHY CRANK-NICOLSON IS THE RIGHT SCHEME
 ---------------------------------------

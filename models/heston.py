@@ -77,6 +77,10 @@ from typing import Literal
 import numpy as np
 from scipy import optimize
 
+# np.trapz was renamed np.trapezoid in NumPy 2.0 (the old name still works but is
+# deprecated); use the new name where available and fall back on numpy < 2.0.
+_trapezoid = np.trapezoid if hasattr(np, "trapezoid") else np.trapz
+
 # ══════════════════════════════════════════════════════════════════
 # Parameter container
 # ══════════════════════════════════════════════════════════════════
@@ -239,8 +243,8 @@ def heston_price_quad(
         P1_vals.append(p1)
         P2_vals.append(p2)
 
-    P1 = 0.5 + np.trapz(P1_vals, phi_arr) / np.pi
-    P2 = 0.5 + np.trapz(P2_vals, phi_arr) / np.pi
+    P1 = 0.5 + _trapezoid(P1_vals, phi_arr) / np.pi
+    P2 = 0.5 + _trapezoid(P2_vals, phi_arr) / np.pi
 
     call = S * P1 - K * np.exp(-r * T) * P2
 

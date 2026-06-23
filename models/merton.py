@@ -133,6 +133,9 @@ class MertonJumpDiffusion:
         Log-space Poisson weights (via lgamma) keep the n! denominator stable for
         large n.
         """
+        if self.T <= 0.0:
+            intrinsic = self.S - self.K if option_type == "call" else self.K - self.S
+            return float(max(intrinsic, 0.0))
         k = self._k
         lam_p = self.lam * (1.0 + k)          # λ' = λ(1+k)
         log_lam_p_T = np.log(lam_p * self.T) if lam_p > 0 else -np.inf
