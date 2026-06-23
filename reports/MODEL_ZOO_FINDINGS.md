@@ -116,7 +116,7 @@ big-move days.
 move-days carry **38%** of the total convexity P&L, and days with |return| > 3% (just **2.1%**
 of days) carry **30%** of the total squared hedging error. The realised-minus-implied gamma
 P&L averages **+1.15** on big-move days versus **−0.09** on calm days. **But this is what fat
-tails alone imply:** a Student-t(6) null (≈ SPY's kurtosis) already puts ~38% in the top 5%
+tails alone imply:** a Student-t(6) null already puts ~38% in the top 5%
 (Gaussian ~28%), so the observed 38% lands on the fat-tailed null. Read V4 as an *illustrative
 decomposition* of where a delta hedge bleeds — not independent evidence of jumps (that is V2) —
 which still motivates why a delta-only hedge needs a gamma overlay.
