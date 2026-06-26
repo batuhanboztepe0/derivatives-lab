@@ -124,11 +124,15 @@ class BinomialTree:
             V = np.maximum(self.K - S_T, 0.0)
 
         # ── Roll back to the root ─────────────────────────────────────────────
+        if exercise == "american":
+            # Precompute powers once to avoid O(N²) exponentiations in the loop
+            u_pow = u ** np.arange(N + 1)
+            d_pow = d ** np.arange(N + 1)
         for i in range(N - 1, -1, -1):
             V = disc * (p * V[1:] + (1.0 - p) * V[:-1])   # discounted expectation
             if exercise == "american":
-                j = np.arange(i + 1)
-                S_i = self.S * u ** j * d ** (i - j)       # spot at each node of step i
+                # node j has j up-moves and (i-j) down-moves: u^j · d^(i-j)
+                S_i = self.S * u_pow[:i + 1] * d_pow[i::-1]  # spot at each node of step i
                 if option_type == "call":
                     intrinsic = np.maximum(S_i - self.K, 0.0)
                 else:

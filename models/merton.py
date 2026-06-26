@@ -121,6 +121,29 @@ class MertonJumpDiffusion:
         """Mean proportional jump size k = E[Y − 1] = e^{μ_J + ½δ_J²} − 1."""
         return np.exp(self.mu_j + 0.5 * self.delta_j ** 2) - 1.0
 
+    def _poisson_terms(self) -> list[tuple[float, float, float]]:
+        """
+        Compute (weight, sigma_n, r_n) for each n in range(n_terms).
+
+        weight  = e^{-λ'T} (λ'T)^n / n!  (log-space via lgamma for stability)
+        sigma_n = sqrt(σ² + n·δ_J²/T)
+        r_n     = r − λk + n·ln(1+k)/T
+        """
+        k = self._k
+        lam_p = self.lam * (1.0 + k)          # λ' = λ(1+k)
+        log_lam_p_T = np.log(lam_p * self.T) if lam_p > 0 else -np.inf
+        terms = []
+        for n in range(self.n_terms):
+            if lam_p > 0:
+                log_w = -lam_p * self.T + n * log_lam_p_T - lgamma(n + 1)
+                weight = np.exp(log_w)
+            else:
+                weight = 1.0 if n == 0 else 0.0   # no jumps → only the BS term
+            sigma_n = np.sqrt(self.sigma ** 2 + n * self.delta_j ** 2 / self.T)
+            r_n = self.r - self.lam * k + n * np.log1p(k) / self.T
+            terms.append((weight, sigma_n, r_n))
+        return terms
+
     def price(self, option_type: OptionType = "call") -> float:
         """
         Closed-form Merton price as a Poisson-weighted sum of Black-Scholes prices.
@@ -136,24 +159,10 @@ class MertonJumpDiffusion:
         if self.T <= 0.0:
             intrinsic = self.S - self.K if option_type == "call" else self.K - self.S
             return float(max(intrinsic, 0.0))
-        k = self._k
-        lam_p = self.lam * (1.0 + k)          # λ' = λ(1+k)
-        log_lam_p_T = np.log(lam_p * self.T) if lam_p > 0 else -np.inf
-
-        total = 0.0
-        for n in range(self.n_terms):
-            # Poisson weight e^{-λ'T} (λ'T)^n / n!  computed in log space
-            if lam_p > 0:
-                log_w = -lam_p * self.T + n * log_lam_p_T - lgamma(n + 1)
-                weight = np.exp(log_w)
-            else:
-                weight = 1.0 if n == 0 else 0.0   # no jumps → only the BS term
-
-            sigma_n = np.sqrt(self.sigma ** 2 + n * self.delta_j ** 2 / self.T)
-            r_n = self.r - self.lam * k + n * np.log1p(k) / self.T
-            bs_n = BlackScholes(self.S, self.K, self.T, r_n, sigma_n).price(option_type)
-            total += weight * bs_n
-
+        total = sum(
+            weight * BlackScholes(self.S, self.K, self.T, r_n, sigma_n).price(option_type)
+            for weight, sigma_n, r_n in self._poisson_terms()
+        )
         return float(total)
 
     def _simulate_terminal(self) -> np.ndarray:
@@ -192,19 +201,10 @@ class MertonJumpDiffusion:
         the jump-adjusted hedge ratio — the model-based benchmark a Merton hedger
         would use instead of the naive constant-σ Black-Scholes delta.
         """
-        k = self._k
-        lam_p = self.lam * (1.0 + k)
-        log_lam_p_T = np.log(lam_p * self.T) if lam_p > 0 else -np.inf
-
-        total = 0.0
-        for n in range(self.n_terms):
-            if lam_p > 0:
-                weight = np.exp(-lam_p * self.T + n * log_lam_p_T - lgamma(n + 1))
-            else:
-                weight = 1.0 if n == 0 else 0.0
-            sigma_n = np.sqrt(self.sigma ** 2 + n * self.delta_j ** 2 / self.T)
-            r_n = self.r - self.lam * k + n * np.log1p(k) / self.T
-            total += weight * BlackScholes(self.S, self.K, self.T, r_n, sigma_n).delta(option_type)
+        total = sum(
+            weight * BlackScholes(self.S, self.K, self.T, r_n, sigma_n).delta(option_type)
+            for weight, sigma_n, r_n in self._poisson_terms()
+        )
         return float(total)
 
     def simulate_paths(self, n_paths: int, n_steps: int, seed: int | None = None) -> np.ndarray:

@@ -63,6 +63,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from config import SIGMA_MAX, SIGMA_MIN
 from models.black_scholes import BlackScholes
 
 # ------------------------------------------------------------------
@@ -271,7 +272,8 @@ class VolSurfaceNN:
         with torch.no_grad():
             preds_scaled = self.model(torch.FloatTensor(X_scaled)).numpy()
 
-        return self.scaler_y.inverse_transform(preds_scaled).ravel()
+        iv = self.scaler_y.inverse_transform(preds_scaled).ravel()
+        return np.clip(iv, SIGMA_MIN, SIGMA_MAX)
 
     def plot_surface(self, title: str = "Learned Volatility Surface") -> None:
         """3D plot of the learned surface vs observed data."""

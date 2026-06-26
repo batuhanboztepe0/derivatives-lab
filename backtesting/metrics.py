@@ -34,6 +34,8 @@ from typing import Union
 import numpy as np
 import pandas as pd
 
+from config import TRADING_DAYS
+
 ArrayLike = Union[np.ndarray, pd.Series, list]
 
 
@@ -47,11 +49,11 @@ def sharpe_ratio(returns: ArrayLike, risk_free_rate: float = 0.0) -> float:
     Rule of thumb: <0.5 poor | 0.5-1 ok | 1-2 good | >2 suspicious
     """
     returns = np.asarray(returns, dtype=float)
-    rf = risk_free_rate / 252
+    rf = risk_free_rate / TRADING_DAYS
     excess = returns - rf
     if excess.std() < 1e-14:
         return np.nan
-    return (excess.mean() / excess.std()) * np.sqrt(252)
+    return (excess.mean() / excess.std()) * np.sqrt(TRADING_DAYS)
 
 
 def sortino_ratio(returns: ArrayLike, risk_free_rate: float = 0.0) -> float:
@@ -66,13 +68,13 @@ def sortino_ratio(returns: ArrayLike, risk_free_rate: float = 0.0) -> float:
     even if total vol is high.
     """
     returns = np.asarray(returns, dtype=float)
-    rf = risk_free_rate / 252
+    rf = risk_free_rate / TRADING_DAYS
     excess = returns - rf
     shortfall = np.minimum(excess, 0.0)
     downside_dev = np.sqrt(np.mean(shortfall**2))
     if downside_dev < 1e-14:
         return np.nan
-    return (excess.mean() / downside_dev) * np.sqrt(252)
+    return (excess.mean() / downside_dev) * np.sqrt(TRADING_DAYS)
 
 
 def max_drawdown(returns: ArrayLike) -> dict[str, float]:
@@ -114,7 +116,7 @@ def calmar_ratio(returns: ArrayLike) -> float:
     returns = np.asarray(returns, dtype=float)
     if returns.size == 0:
         return np.nan
-    ann_return = np.prod(1 + returns) ** (252 / len(returns)) - 1   # CAGR (geometric)
+    ann_return = np.prod(1 + returns) ** (TRADING_DAYS / len(returns)) - 1   # CAGR (geometric)
     mdd = max_drawdown(returns)["max_drawdown"]
     if mdd == 0:
         return np.nan
@@ -158,8 +160,8 @@ def summary(returns: ArrayLike, risk_free_rate: float = 0.0) -> pd.DataFrame:
     mdd_info = max_drawdown(returns)
 
     data = {
-        "Annualised Return": f"{np.mean(returns) * 252:.2%}",
-        "Annualised Vol":    f"{np.std(returns) * np.sqrt(252):.2%}",
+        "Annualised Return": f"{np.mean(returns) * TRADING_DAYS:.2%}",
+        "Annualised Vol":    f"{np.std(returns) * np.sqrt(TRADING_DAYS):.2%}",
         "Sharpe Ratio":      f"{sharpe_ratio(returns, risk_free_rate):.3f}",
         "Sortino Ratio":     f"{sortino_ratio(returns, risk_free_rate):.3f}",
         "Calmar Ratio":      f"{calmar_ratio(returns):.3f}",

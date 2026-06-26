@@ -382,8 +382,4 @@ class DeepHedger:
         """Black-Scholes delta as a numpy array (benchmark curve for plots)."""
         spot = np.atleast_1d(np.asarray(spot, dtype=np.float64))
         tau = max(tau, 1e-12)
-        d1 = (np.log(spot / self.K) + (self.r + 0.5 * self.sigma ** 2) * tau) / (
-            self.sigma * math.sqrt(tau))
-        from scipy.stats import norm
-        delta = norm.cdf(d1)
-        return delta - 1.0 if self.option_type == "put" else delta
+        return BlackScholes(spot, self.K, tau, self.r, self.sigma).delta(self.option_type)

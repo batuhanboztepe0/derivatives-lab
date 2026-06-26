@@ -31,7 +31,10 @@ DEFAULT_DIVIDEND_YIELD: float = 0.0
 # ── Data ─────────────────────────────────────────────────────────
 ROOT_DIR: Path = Path(__file__).parent
 DATA_DIR: Path = ROOT_DIR / "data" / "cache"
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    pass
 
 # ── Heston calibration defaults ──────────────────────────────────
 HESTON_DE_POPSIZE: int   = 15

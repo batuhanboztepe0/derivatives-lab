@@ -49,6 +49,8 @@ def fetch_and_cache(
     if path.exists():
         return pd.read_parquet(path)
     df = fetch_fn()
+    if df is None or len(df) == 0:
+        raise ValueError(f"fetch_fn returned no data for {ticker}/{what}; refusing to cache an empty result")
     path.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(path)
     return df

@@ -77,6 +77,8 @@ from typing import Literal
 import numpy as np
 from scipy import optimize
 
+from config import SEED
+
 # np.trapz was renamed np.trapezoid in NumPy 2.0 (the old name still works but is
 # deprecated); use the new name where available and fall back on numpy < 2.0.
 _trapezoid = np.trapezoid if hasattr(np, "trapezoid") else np.trapz
@@ -146,10 +148,10 @@ class HestonParams:
 # ══════════════════════════════════════════════════════════════════
 
 def _heston_cf(
-    phi: complex,
+    phi: complex | np.ndarray,
     S: float, T: float, r: float,
     params: HestonParams,
-) -> complex:
+) -> complex | np.ndarray:
     """
     Numerically stable Heston characteristic function.
 
@@ -160,7 +162,10 @@ def _heston_cf(
     a guard for the ρ > 0 / wide-grid cases, not the full log-form reformulation.
 
     φ(u) = E^Q[exp(iu · log S_T)] where X = log(S_T)
+
+    Accepts a scalar or a numpy ndarray for phi; returns the same shape.
     """
+    phi = np.asarray(phi, dtype=complex)
     κ, θ, ξ, ρ, v0 = params.kappa, params.theta, params.xi, params.rho, params.v0
     iu = 1j * phi
 
@@ -168,11 +173,10 @@ def _heston_cf(
     d_sq = (ρ * ξ * iu - κ)**2 + ξ**2 * (iu + phi**2)
     d    = np.sqrt(d_sq)
 
-    # STABILITY FIX: ensure Re(d) ≥ 0
+    # STABILITY FIX: ensure Re(d) ≥ 0 elementwise
     # Without this, for certain (phi, params) combinations the branch cut
     # of log() is crossed and the integrand becomes discontinuous.
-    if np.real(d) < 0:
-        d = -d
+    d = np.where(np.real(d) < 0, -d, d)
 
     g = (κ - ρ * ξ * iu - d) / (κ - ρ * ξ * iu + d)
 
@@ -228,20 +232,16 @@ def heston_price_quad(
     phi_arr = np.linspace(1e-8, phi_max, n_points)
     log_K   = np.log(K)
 
-    P1_vals, P2_vals = [], []
     cf_neg_i = _heston_cf(-1j, S, T, r, params)   # normalisation for P1
 
-    for phi in phi_arr:
-        # P1 integrand: CF evaluated at (phi - i), normalised
-        cf_p1 = _heston_cf(phi - 1j, S, T, r, params)
-        p1    = np.real(np.exp(-1j * phi * log_K) * cf_p1 / (1j * phi * cf_neg_i))
+    # Vectorised CF evaluation over the entire grid at once
+    cf_p1 = _heston_cf(phi_arr - 1j, S, T, r, params)
+    cf_p2 = _heston_cf(phi_arr,       S, T, r, params)
 
-        # P2 integrand: CF evaluated at phi
-        cf_p2 = _heston_cf(phi, S, T, r, params)
-        p2    = np.real(np.exp(-1j * phi * log_K) * cf_p2 / (1j * phi))
-
-        P1_vals.append(p1)
-        P2_vals.append(p2)
+    # P1 integrand: CF evaluated at (phi - i), normalised
+    P1_vals = np.real(np.exp(-1j * phi_arr * log_K) * cf_p1 / (1j * phi_arr * cf_neg_i))
+    # P2 integrand: CF evaluated at phi
+    P2_vals = np.real(np.exp(-1j * phi_arr * log_K) * cf_p2 / (1j * phi_arr))
 
     P1 = 0.5 + _trapezoid(P1_vals, phi_arr) / np.pi
     P2 = 0.5 + _trapezoid(P2_vals, phi_arr) / np.pi
@@ -309,16 +309,10 @@ def heston_price_fft(
     w[0] = 1
     w    = w / 3.0
 
-    # Vectorised CF evaluation on integration grid
-    def psi_vec(u_arr):
-        out = np.zeros(N, dtype=complex)
-        for idx, u in enumerate(u_arr):
-            phi   = _heston_cf(u - (alpha + 1) * 1j, S, T, r, params)
-            denom = alpha**2 + alpha - u**2 + 1j * (2 * alpha + 1) * u
-            out[idx] = np.exp(-r * T) * phi / denom
-        return out
-
-    psi = psi_vec(u_arr)
+    # Vectorised CF evaluation on the entire integration grid at once
+    phi_cf = _heston_cf(u_arr - (alpha + 1) * 1j, S, T, r, params)
+    denom  = alpha**2 + alpha - u_arr**2 + 1j * (2 * alpha + 1) * u_arr
+    psi    = np.exp(-r * T) * phi_cf / denom
 
     # FFT input
     x = np.exp(1j * b * u_arr) * psi * eta * w
@@ -391,6 +385,18 @@ def heston_mc(
     S_t = np.full(n, float(S))
     v_t = np.full(n, float(v0))
 
+    # Hoist QE loop-invariant constants (depend only on kappa, theta, xi, rho, dt, r)
+    if scheme == "qe":
+        _qe_e       = np.exp(-κ * dt)
+        _qe_s2_c    = θ * ξ**2 / (2 * κ) * (1 - _qe_e)**2   # constant part of s2
+        _qe_s2_v    = ξ**2 * _qe_e / κ * (1 - _qe_e)         # v_pos coefficient in s2
+        _qe_psi_c   = 1.5
+        _qe_K0      = -ρ * κ * θ * dt / ξ
+        _qe_K1      = (κ * ρ / ξ - 0.5) * 0.5 * dt - ρ / ξ
+        _qe_K2      = (κ * ρ / ξ - 0.5) * 0.5 * dt + ρ / ξ
+        _qe_K34     = 0.5 * (1 - ρ**2) * dt
+        _qe_r_dt    = r * dt
+
     for t in range(n_steps):
         v_pos = np.maximum(v_t, 0.0)
 
@@ -405,24 +411,21 @@ def heston_mc(
             v_t = np.maximum(v_t + dv, 0.0)
 
         else:  # qe — Andersen (2008)
-            e   = np.exp(-κ * dt)
-            m   = θ + (v_pos - θ) * e
-            s2  = (v_pos * ξ**2 * e / κ * (1 - e)
-                   + θ * ξ**2 / (2 * κ) * (1 - e)**2)
+            m   = θ + (v_pos - θ) * _qe_e
+            s2  = v_pos * _qe_s2_v + _qe_s2_c
             psi = np.where(m > 0, s2 / (m**2 + 1e-14), 2.0)
-            psi_c = 1.5
 
             # Case 1: exponential approximation (psi ≤ psi_c)
-            b2   = np.where(psi <= psi_c,
+            b2   = np.where(psi <= _qe_psi_c,
                             2 / psi - 1 + np.sqrt(2 / psi * (2 / psi - 1)),
                             0.0)
-            a    = np.where(psi <= psi_c, m / (1 + b2), 0.0)
+            a    = np.where(psi <= _qe_psi_c, m / (1 + b2), 0.0)
             Z_qe = rng.standard_normal(n)
             v_c1 = a * (np.sqrt(b2) + Z_qe)**2
 
             # Case 2: mixed exponential (psi > psi_c)
-            p    = np.where(psi > psi_c, (psi - 1) / (psi + 1), 0.0)
-            beta = np.where((psi > psi_c) & (m > 1e-14),
+            p    = np.where(psi > _qe_psi_c, (psi - 1) / (psi + 1), 0.0)
+            beta = np.where((psi > _qe_psi_c) & (m > 1e-14),
                             (1 - p) / m, 0.0)
             U    = rng.uniform(0, 1, n)
             safe_p    = np.where(p > 1 - 1e-10, 1 - 1e-10, p)
@@ -430,18 +433,14 @@ def heston_mc(
             v_c2 = np.where(U <= p, 0.0,
                             -np.log(np.maximum((1 - U) / (1 - safe_p), 1e-14))
                             / safe_beta)
-            v_new = np.where(psi <= psi_c, v_c1, v_c2)
+            v_new = np.where(psi <= _qe_psi_c, v_c1, v_c2)
 
             # Log-spot coupling (Andersen 2008, central γ=½): inject ρ through the
             # actual variance increment rather than a separate Brownian — otherwise
             # the stock and variance are uncorrelated and ρ (the skew driver) is lost.
-            K0  = -ρ * κ * θ * dt / ξ
-            K1  = (κ * ρ / ξ - 0.5) * 0.5 * dt - ρ / ξ
-            K2  = (κ * ρ / ξ - 0.5) * 0.5 * dt + ρ / ξ
-            K34 = 0.5 * (1 - ρ**2) * dt
             Z_x = rng.standard_normal(n)
-            S_t *= np.exp(r * dt + K0 + K1 * v_pos + K2 * v_new
-                          + np.sqrt(np.maximum(K34 * (v_pos + v_new), 0.0)) * Z_x)
+            S_t *= np.exp(_qe_r_dt + _qe_K0 + _qe_K1 * v_pos + _qe_K2 * v_new
+                          + np.sqrt(np.maximum(_qe_K34 * (v_pos + v_new), 0.0)) * Z_x)
             v_t = v_new
 
         # Stock update — euler/milstein use the ρ-correlated shock Z1 (Z2 carries ρ);
@@ -674,7 +673,7 @@ class HestonCalibrator:
             bounds=self.BOUNDS,
             popsize=self.de_popsize,
             maxiter=self.de_maxiter,
-            seed=42,
+            seed=SEED,
             tol=self.de_tol,
             mutation=(0.5, 1.5),
             recombination=0.7,
@@ -817,9 +816,6 @@ class Heston:
         Compare Heston vs Black-Scholes (with σ = √v₀).
         The price difference quantifies the value of stochastic vol.
         """
-        import os
-        import sys
-        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         from models.black_scholes import BlackScholes
 
         sigma_flat = np.sqrt(self.params.v0)
