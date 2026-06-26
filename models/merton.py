@@ -128,6 +128,8 @@ class MertonJumpDiffusion:
         weight  = e^{-λ'T} (λ'T)^n / n!  (log-space via lgamma for stability)
         sigma_n = sqrt(σ² + n·δ_J²/T)
         r_n     = r − λk + n·ln(1+k)/T
+
+        Requires T > 0 (divides by T); price() handles the T <= 0 case before calling.
         """
         k = self._k
         lam_p = self.lam * (1.0 + k)          # λ' = λ(1+k)

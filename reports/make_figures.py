@@ -38,16 +38,26 @@ def _miss():
     raise RuntimeError("cache missing — run the V-notebooks first")
 
 
-def _top5_convexity_share() -> int:
-    """Return the top-5% convexity-P&L share as an integer percent (used in V4 figures)."""
+def _v4_convexity() -> tuple[np.ndarray, np.ndarray]:
+    """Per-day convexity P&L and the |return|-descending day order (shared by the V4 figures).
+
+    Matches notebook 07: gamma P&L = ½·Γ·(ΔS)², days ranked by |return| (top move-days first).
+    Single source of truth so the evidence map and the V4 figure cannot drift apart.
+    """
     S, IV = _spy_vix()
     tau = 21 / TRADING_DAYS
     dS = np.diff(S)
     ret = dS / S[:-1]
     gamma = np.array([BlackScholes(S[t], S[t], tau, R, IV[t]).gamma() for t in range(len(S) - 1)])
     gpnl = 0.5 * gamma * dS ** 2
-    order = np.argsort(np.abs(ret))[::-1]   # rank by |return| (top move-days), matching notebook 07
-    k5 = int(0.05 * len(ret))
+    order = np.argsort(np.abs(ret))[::-1]
+    return gpnl, order
+
+
+def _top5_convexity_share() -> int:
+    """Top-5% move-days' share of convexity P&L, as an integer percent (used in V4 figures)."""
+    gpnl, order = _v4_convexity()
+    k5 = int(0.05 * len(order))
     return int(round(gpnl[order[:k5]].sum() / gpnl.sum() * 100))
 
 
@@ -93,6 +103,8 @@ def fig_v1_term_structure() -> None:
     K = mny * S
     maturities = [(1 / 52, "1w"), (1 / 12, "1m"), (0.25, "3m"), (1.0, "1y")]
     hp = HestonParams(kappa=2.0, theta=0.04, xi=0.6, rho=-0.7, v0=0.04)
+    # sharey=False: Merton's short-T smile spikes well above the Heston range,
+    # so a shared axis would compress the Heston panel into an unreadable band.
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(11, 4.4), sharey=False)
     cmap = plt.cm.viridis(np.linspace(0.15, 0.85, len(maturities)))
     for (T, lbl), c in zip(maturities, cmap, strict=False):
@@ -130,16 +142,10 @@ def _spy_vix():
 
 def fig_v4_concentration() -> None:
     """Short-gamma P&L concentrates on big-move days — vs a fat-tailed null."""
-    S, IV = _spy_vix()
-    tau = 21 / TRADING_DAYS
-    dS = np.diff(S)
-    ret = dS / S[:-1]
-    gamma = np.array([BlackScholes(S[t], S[t], tau, R, IV[t]).gamma() for t in range(len(S) - 1)])
-    gpnl = 0.5 * gamma * dS ** 2
-    order = np.argsort(np.abs(ret))[::-1]   # rank by |return| (top move-days), matching notebook 07
+    gpnl, order = _v4_convexity()
     frac = np.arange(1, len(gpnl) + 1) / len(gpnl)
     cum = np.cumsum(gpnl[order]) / gpnl.sum()
-    k5 = int(0.05 * len(ret))
+    k5 = int(0.05 * len(gpnl))
     obs = gpnl[order[:k5]].sum() / gpnl.sum()   # top-5% move-days, notebook-07 convention
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(11, 4.4))
     a1.plot(frac * 100, cum * 100, color=GREEN, lw=2.4, label="observed (SPY)")
@@ -150,7 +156,7 @@ def fig_v4_concentration() -> None:
     a1.set_ylabel("cumulative % of convexity P&L")
     a1.set_title("Convexity P&L is concentrated…")
     rng = np.random.default_rng(42)
-    n = len(dS)
+    n = len(gpnl)
     top5 = lambda x: np.sort(x ** 2)[-int(0.05 * n):].sum() / (x ** 2).sum()
     gauss = np.mean([top5(rng.standard_normal(n)) for _ in range(800)])
     t6 = np.mean([top5(rng.standard_t(6, n)) for _ in range(800)])

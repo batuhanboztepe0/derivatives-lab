@@ -34,7 +34,7 @@ DATA_DIR: Path = ROOT_DIR / "data" / "cache"
 try:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 except OSError:
-    pass
+    pass   # tolerate a read-only filesystem at import; cache writes will surface their own error
 
 # ── Heston calibration defaults ──────────────────────────────────
 HESTON_DE_POPSIZE: int   = 15
