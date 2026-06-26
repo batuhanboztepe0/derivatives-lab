@@ -43,11 +43,12 @@ def _top5_convexity_share() -> int:
     S, IV = _spy_vix()
     tau = 21 / TRADING_DAYS
     dS = np.diff(S)
+    ret = dS / S[:-1]
     gamma = np.array([BlackScholes(S[t], S[t], tau, R, IV[t]).gamma() for t in range(len(S) - 1)])
     gpnl = 0.5 * gamma * dS ** 2
-    order = np.argsort(gpnl)[::-1]
-    cum = np.cumsum(gpnl[order]) / gpnl.sum()
-    return int(round(cum[int(0.05 * len(cum))] * 100))
+    order = np.argsort(np.abs(ret))[::-1]   # rank by |return| (top move-days), matching notebook 07
+    k5 = int(0.05 * len(ret))
+    return int(round(gpnl[order[:k5]].sum() / gpnl.sum() * 100))
 
 
 def fig_evidence_map() -> None:
@@ -132,17 +133,20 @@ def fig_v4_concentration() -> None:
     S, IV = _spy_vix()
     tau = 21 / TRADING_DAYS
     dS = np.diff(S)
+    ret = dS / S[:-1]
     gamma = np.array([BlackScholes(S[t], S[t], tau, R, IV[t]).gamma() for t in range(len(S) - 1)])
     gpnl = 0.5 * gamma * dS ** 2
-    order = np.argsort(gpnl)[::-1]
+    order = np.argsort(np.abs(ret))[::-1]   # rank by |return| (top move-days), matching notebook 07
     frac = np.arange(1, len(gpnl) + 1) / len(gpnl)
     cum = np.cumsum(gpnl[order]) / gpnl.sum()
+    k5 = int(0.05 * len(ret))
+    obs = gpnl[order[:k5]].sum() / gpnl.sum()   # top-5% move-days, notebook-07 convention
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(11, 4.4))
     a1.plot(frac * 100, cum * 100, color=GREEN, lw=2.4, label="observed (SPY)")
     a1.plot([0, 100], [0, 100], color=GREY, ls=":", label="uniform (no concentration)")
     a1.axvline(5, color=AMBER, ls="--", lw=1)
-    a1.text(6, 20, f"top 5% of days\n→ {cum[int(0.05 * len(cum))] * 100:.0f}% of convexity P&L", fontsize=8.5)
-    a1.set_xlabel("% of days (largest convexity-P&L first)")
+    a1.text(6, 20, f"top 5% of days\n→ {obs * 100:.0f}% of convexity P&L", fontsize=8.5)
+    a1.set_xlabel("% of days (largest move first)")
     a1.set_ylabel("cumulative % of convexity P&L")
     a1.set_title("Convexity P&L is concentrated…")
     rng = np.random.default_rng(42)
@@ -150,7 +154,6 @@ def fig_v4_concentration() -> None:
     top5 = lambda x: np.sort(x ** 2)[-int(0.05 * n):].sum() / (x ** 2).sum()
     gauss = np.mean([top5(rng.standard_normal(n)) for _ in range(800)])
     t6 = np.mean([top5(rng.standard_t(6, n)) for _ in range(800)])
-    obs = cum[int(0.05 * len(cum))]
     a2.bar(["Gaussian\nnull", "Student-t(6)\nnull", "observed\n(SPY)"],
            [gauss * 100, t6 * 100, obs * 100], color=[GREY, AMBER, GREEN])
     a2.set_ylabel("top-5% share of squared moves (%)")
