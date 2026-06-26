@@ -22,6 +22,7 @@ import numpy as np  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import DEFAULT_RISK_FREE_RATE as R  # noqa: E402
+from config import TRADING_DAYS
 from data.fetcher import fetch_and_cache  # noqa: E402
 from models.black_scholes import BlackScholes  # noqa: E402
 from models.heston import HestonParams, heston_implied_vol, heston_price_fft  # noqa: E402
@@ -37,13 +38,26 @@ def _miss():
     raise RuntimeError("cache missing — run the V-notebooks first")
 
 
+def _top5_convexity_share() -> int:
+    """Return the top-5% convexity-P&L share as an integer percent (used in V4 figures)."""
+    S, IV = _spy_vix()
+    tau = 21 / TRADING_DAYS
+    dS = np.diff(S)
+    gamma = np.array([BlackScholes(S[t], S[t], tau, R, IV[t]).gamma() for t in range(len(S) - 1)])
+    gpnl = 0.5 * gamma * dS ** 2
+    order = np.argsort(gpnl)[::-1]
+    cum = np.cumsum(gpnl[order]) / gpnl.sum()
+    return int(round(cum[int(0.05 * len(cum))] * 100))
+
+
 def fig_evidence_map() -> None:
     """Synthetic claim → real-data verdict, one row per verification (the project anchor)."""
+    v4_share = _top5_convexity_share()
     rows = [
         ("V1  smile / skew", "Merton (jumps) fits short skew 0.52vp;\nHeston underfits 1.7vp; flat BS 4.5vp", GREEN),
         ("V2  fat tails", "excess kurtosis 15.2, GBM rejected\n(Student-t/jump-mix beats Normal by AIC)", GREEN),
         ("V3  MV-delta", "positive vs 0% GBM null; magnitude\ninflated by VIX-as-IV (~88% leakage)", AMBER),
-        ("V4  gamma P&L", "concentrates on big moves (38%) —\n= fat-tail null, illustrative not jumps", AMBER),
+        ("V4  gamma P&L", f"concentrates on big moves ({v4_share}%) —\n= fat-tail null, illustrative not jumps", AMBER),
         ("V5  deep hedge OOS", "−42% turnover, CI [0.56,0.62] (clean);\nCVaR gain not robust (drift-aided)", GREEN),
         ("V6  longshot bias", "83k markets: slope 1.08 > 1 across tiers/years\n(cluster-robust); longshot side measure-sensitive", GREEN),
     ]
@@ -78,14 +92,22 @@ def fig_v1_term_structure() -> None:
     K = mny * S
     maturities = [(1 / 52, "1w"), (1 / 12, "1m"), (0.25, "3m"), (1.0, "1y")]
     hp = HestonParams(kappa=2.0, theta=0.04, xi=0.6, rho=-0.7, v0=0.04)
-    fig, (a1, a2) = plt.subplots(1, 2, figsize=(11, 4.4), sharey=True)
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(11, 4.4), sharey=False)
     cmap = plt.cm.viridis(np.linspace(0.15, 0.85, len(maturities)))
     for (T, lbl), c in zip(maturities, cmap, strict=False):
-        hiv = [heston_implied_vol(float(heston_price_fft(S, np.array([k]), T, R, hp)[0]), S, k, T, R) for k in K]
-        miv = [BlackScholes(S, k, T, R, 0.2).implied_vol(
-            MertonJumpDiffusion(S, k, T, R, 0.13, 1.0, -0.18, 0.15).price("call"), "call") for k in K]
-        a1.plot(mny, np.array(hiv) * 100, color=c, lw=2, label=lbl)
-        a2.plot(mny, np.array(miv) * 100, color=c, lw=2, label=lbl)
+        # Price every strike in one FFT, then invert. Deep-wing 1w options have
+        # no invertible time value (FFT price = intrinsic), so their implied vol
+        # comes back ~0; mask those rather than draw a misleading cliff to zero.
+        hpx = heston_price_fft(S, K, T, R, hp)
+        hiv = np.array([heston_implied_vol(float(px), S, k, T, R) or np.nan
+                        for px, k in zip(hpx, K, strict=False)], dtype=float)
+        miv = np.array([BlackScholes(S, k, T, R, 0.2).implied_vol(
+            MertonJumpDiffusion(S, k, T, R, 0.13, 1.0, -0.18, 0.15).price("call"), "call") or np.nan
+            for k in K], dtype=float)
+        hiv[hiv < 1e-4] = np.nan
+        miv[miv < 1e-4] = np.nan
+        a1.plot(mny, hiv * 100, color=c, lw=2, label=lbl)
+        a2.plot(mny, miv * 100, color=c, lw=2, label=lbl)
     a1.set_title("Heston: skew BUILDS with maturity\n(flat at short T → underfits 1-month skew)")
     a2.set_title("Merton (jumps): skew STRONGEST at short T\n(matches the real 1-month skew)")
     for a in (a1, a2):
@@ -108,7 +130,7 @@ def _spy_vix():
 def fig_v4_concentration() -> None:
     """Short-gamma P&L concentrates on big-move days — vs a fat-tailed null."""
     S, IV = _spy_vix()
-    tau = 21 / 252
+    tau = 21 / TRADING_DAYS
     dS = np.diff(S)
     gamma = np.array([BlackScholes(S[t], S[t], tau, R, IV[t]).gamma() for t in range(len(S) - 1)])
     gpnl = 0.5 * gamma * dS ** 2
@@ -120,7 +142,7 @@ def fig_v4_concentration() -> None:
     a1.plot([0, 100], [0, 100], color=GREY, ls=":", label="uniform (no concentration)")
     a1.axvline(5, color=AMBER, ls="--", lw=1)
     a1.text(6, 20, f"top 5% of days\n→ {cum[int(0.05 * len(cum))] * 100:.0f}% of convexity P&L", fontsize=8.5)
-    a1.set_xlabel("% of days (largest move first)")
+    a1.set_xlabel("% of days (largest convexity-P&L first)")
     a1.set_ylabel("cumulative % of convexity P&L")
     a1.set_title("Convexity P&L is concentrated…")
     rng = np.random.default_rng(42)
@@ -144,6 +166,8 @@ def fig_v4_concentration() -> None:
 def fig_v6_calibration() -> None:
     """The favorite–longshot calibration curve over 83k resolved Polymarket markets."""
     pm = fetch_and_cache("polymarket", "resolved_trades", "2026-06-20", _miss)
+    _yr_min = int(pm["end_date"].dt.year.min())
+    _yr_max = int(pm["end_date"].dt.year.max())
     p = pm["prob"].to_numpy()
     y = pm["y"].to_numpy()
     edges = np.array([0, .05, .1, .2, .35, .5, .65, .8, .95, 1.0])
@@ -165,7 +189,7 @@ def fig_v6_calibration() -> None:
     ax.text(0.52, 0.92, "favorites underpriced\n(above the line)", fontsize=8.5, color=GREEN)
     ax.set_xlabel("market price (implied YES probability)")
     ax.set_ylabel("realised YES frequency")
-    ax.set_title("V6 — favorite–longshot bias on Polymarket (2023–2028)\n"
+    ax.set_title(f"V6 — favorite–longshot bias on Polymarket ({_yr_min}–{_yr_max})\n"
                  "slope 1.08 > 1 across tiers and years (cluster-robust)")
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
