@@ -133,6 +133,43 @@ def fig_v1_term_structure() -> None:
     plt.close(fig)
 
 
+def fig_v1_smile_fit() -> None:
+    """V1 (the empirical result): the real SPY short-dated smile with the model fits and RMSEs."""
+    surface = fetch_and_cache("SPY", "vol_surface", "2026-06-20", _miss)
+    S = float(surface["S"].iloc[0])
+    dte = (surface.groupby("expiry")["T"].first() * 365).round().astype(int)
+    counts = surface.groupby("expiry").size()
+    liquid = [e for e in dte.index if counts[e] >= 8]
+    rep = min(liquid, key=lambda e: abs(dte[e] - 35))   # nearest liquid expiry to ~35 days
+    d = surface[(surface["expiry"] == rep) & surface["moneyness"].between(0.85, 1.15)].sort_values("strike")
+    K, T, miv = d["strike"].to_numpy(float), float(d["T"].iloc[0]), d["IV"].to_numpy(float)
+    mny = K / S
+    # Parameters calibrated in research/04 (held fixed here; the figure re-prices, it does not re-fit).
+    merton = np.array([BlackScholes(S, k, T, R, 0.2).implied_vol(
+        MertonJumpDiffusion(S, k, T, R, 0.1005, 0.964, -0.1498, 0.1076).price("call"), "call") or np.nan
+        for k in K])
+    hp = HestonParams(kappa=2.162, theta=0.2844, xi=1.109, rho=-0.824, v0=0.005)
+    heston = np.array([heston_implied_vol(float(px), S, k, T, R) or np.nan
+                       for px, k in zip(heston_price_fft(S, K, T, R, hp), K, strict=False)])
+    bs_flat = 0.1584
+    def rmse(a):
+        return np.sqrt(np.nanmean((a - miv) ** 2)) * 100
+    fig, ax = plt.subplots(figsize=(7.6, 5.0))
+    ax.scatter(mny, miv * 100, s=22, color="black", zorder=5, label="market (SPY)")
+    ax.plot(mny, merton * 100, color=GREEN, lw=2, label=f"Merton (jumps): {rmse(merton):.2f} vp")
+    ax.plot(mny, heston * 100, color=AMBER, lw=2, label=f"Heston (stoch vol): {rmse(heston):.2f} vp")
+    ax.axhline(bs_flat * 100, color=GREY, ls="--", lw=2,
+               label=f"flat BS: {rmse(bs_flat * np.ones_like(miv)):.2f} vp")
+    ax.set_xlabel("moneyness  K / S")
+    ax.set_ylabel("implied vol (%)")
+    ax.set_title(f"V1 — real SPY smile fit ({int(dte[rep])}-day expiry, {len(K)} strikes)\n"
+                 "jumps fit the short skew; diffusive stochastic vol underfits")
+    ax.legend(title="IV-RMSE", fontsize=8.5)
+    fig.tight_layout()
+    fig.savefig(OUT / "v1_smile_fit.png", bbox_inches="tight")
+    plt.close(fig)
+
+
 def _spy_vix():
     spy = fetch_and_cache("SPY", "prices_10y", "2026-06-20", _miss)
     vix = fetch_and_cache("VIX", "close_10y", "2026-06-20", _miss)
@@ -250,6 +287,8 @@ if __name__ == "__main__":
     print("wrote evidence_map.png")
     fig_v1_term_structure()
     print("wrote v1_term_structure.png")
+    fig_v1_smile_fit()
+    print("wrote v1_smile_fit.png")
     fig_v2_returns()
     print("wrote v2_returns.png")
     fig_v4_concentration()

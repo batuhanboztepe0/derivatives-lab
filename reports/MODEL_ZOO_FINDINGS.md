@@ -59,6 +59,8 @@ confirming a structural short-maturity limit. **Flat BS (4.49 vp)** misses the w
 real data the **jump** mechanism explains the short-dated equity skew better than diffusive
 stochastic vol.
 
+![The real SPY 33-day smile with the Merton, Heston, and flat-BS fits and their IV-RMSEs](figures/v1_smile_fit.png)
+
 ![Heston skew builds with maturity; Merton's is strongest at short maturity](figures/v1_term_structure.png)
 
 **Caveats.** SPY options are American and the index pays dividends (~1.3%/yr → only a few bp of
