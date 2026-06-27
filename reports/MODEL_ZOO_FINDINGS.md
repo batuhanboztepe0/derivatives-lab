@@ -35,12 +35,12 @@ merely a consequence of something simpler.
 
 | # | Synthetic claim | Real-data result | Verdict |
 |---|---|---|---|
-| **V1** | Real option smiles are skewed/fat-tailed; jump & stoch-vol models bend, flat BS can't | Merton IV-RMSE **0.52 vp**, Heston **1.67 vp** (underfits even at full DE budget, degenerate params), BS flat **4.49 vp**, all on 77 strikes | ✅ jumps win the short skew (illustration) |
-| **V2** | Real returns are non-Gaussian (fat tails, left skew) | excess kurtosis **15.2**, skew **−0.61**, Jarque–Bera rejects Normal (p≈0); a fat-tailed model (Student-t / jump-mixture) beats Normal by AIC | ✅ GBM rejected |
-| **V3** ★ | Minimum-variance delta should help where real spot-vol leverage exists (synthetic null **0%**) | OOS variance reduction **≈49%**, but ~88% of it is VIX-as-IV leakage; vs **0%** GBM null and Hull–White 2017 **~26%** on real quotes | ✅ direction; magnitude inflated |
-| **V4** | Delta-only hedge is short gamma; losses concentrate on big moves | top 5% move-days carry **38%** of convexity P&L, but a Student-t(6) null already gives ~38% | ✅ illustrative (not jump evidence → V2) |
-| **V5** | The deep hedger's cost/turnover edge isn't a synthetic artefact | OOS **−42% turnover** (ratio 0.58, 95% CI [0.56, 0.62], clean); CVaR₅ +11% point estimate but not robust (drift-aided) | ✅ cost/turnover channel real |
-| **V6** | Prediction-market prices are biased vs realised frequency (Q-vs-P) | **83k markets (2023–2028)**: longshots (p<0.10) priced **2.3%** resolve **1.6%**; favorites (p>0.90) **96.4%→98.8%**; slope **1.08** (cluster-robust, 95% CI [1.07, 1.10]) > 1 across tiers and years; longshot side measure-sensitive | ✅ favorite-longshot bias |
+| **V1** | Real option smiles are skewed/fat-tailed; jump & stoch-vol models bend, flat BS can't | Merton IV-RMSE **0.52 vp**, Heston **1.67 vp** (underfits even at full DE budget, degenerate params), BS flat **4.49 vp**, all on 77 strikes | jumps win the short skew (illustration) |
+| **V2** | Real returns are non-Gaussian (fat tails, left skew) | excess kurtosis **15.2**, skew **−0.61**, Jarque–Bera rejects Normal (p≈0); a fat-tailed model (Student-t / jump-mixture) beats Normal by AIC | GBM rejected |
+| **V3** (primary) | Minimum-variance delta should help where real spot-vol leverage exists (synthetic null **0%**) | OOS variance reduction **≈49%**, but ~88% of it is VIX-as-IV leakage; vs **0%** GBM null and Hull–White 2017 **~26%** on real quotes | direction; magnitude inflated |
+| **V4** | Delta-only hedge is short gamma; losses concentrate on big moves | top 5% move-days carry **38%** of convexity P&L, but a Student-t(6) null already gives ~38% | illustrative (not jump evidence → V2) |
+| **V5** | The deep hedger's cost/turnover edge isn't a synthetic artefact | OOS **−42% turnover** (ratio 0.58, 95% CI [0.56, 0.62], clean); CVaR₅ +11% point estimate but not robust (drift-aided) | cost/turnover channel real |
+| **V6** | Prediction-market prices are biased vs realised frequency (Q-vs-P) | **83k markets (2023–2028)**: longshots (p<0.10) priced **2.3%** resolve **1.6%**; favorites (p>0.90) **96.4%→98.8%**; slope **1.08** (cluster-robust, 95% CI [1.07, 1.10]) > 1 across tiers and years; longshot side measure-sensitive | favorite-longshot bias |
 
 ---
 
@@ -88,7 +88,7 @@ conclusions are the stylised facts and the decisive AIC gap, not the exact λ.
 
 ![SPY returns vs the Gaussian: fat tails on a log-density and a Normal QQ-plot](figures/v2_returns.png)
 
-## V3 ★: Minimum-variance delta hedging
+## V3 (primary): Minimum-variance delta hedging
 
 **Setup (reproducible, no option panel).** Daily SPY + `^VIX` as the ATM ~1-month IV proxy.
 Each day strike a fresh ATM 1-month call at `S_t`, `IV=VIX_t`; one-day delta-hedged P&L
