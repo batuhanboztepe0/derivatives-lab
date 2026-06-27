@@ -25,7 +25,8 @@ The repo is one story in two acts (the notebooks are numbered to be read in orde
 - **Verify on real data (`research/04`–`09`).** The six stress tests, V1 through V6, summarised below.
   Each notebook states its claim, the test, and the verdict, and keeps its caveats in plain sight.
 
-A one-page map of all of this lives in [`research/README.md`](research/README.md).
+The fastest read is [`research/00_overview.ipynb`](research/00_overview.ipynb), which walks the whole
+project top to bottom with the figures. A one-page text map is in [`research/README.md`](research/README.md).
 
 ## The six verifications (V1–V6)
 
@@ -87,3 +88,10 @@ construction caveats rather than the prettiest version. Start with the
 [write-up](reports/MODEL_ZOO_FINDINGS.md), then the notebooks in `research/`. What more data and time
 would add (multi-date calibration with confidence intervals, real option quotes for V3) is in the
 write-up's Limitations section.
+
+## AI tools
+
+This project was built with AI coding assistance (Claude). The use was limited to code
+implementation and refactoring, figure generation, and drafting. At all stages the outputs were
+reviewed, checked against the analytic unit tests and the source code, and revised by me. The
+responsibility for the final content, analysis, and conclusions rests entirely with me.
