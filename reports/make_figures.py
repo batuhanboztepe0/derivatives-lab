@@ -194,7 +194,7 @@ def fig_v6_calibration() -> None:
     ax.plot([0, 1], [0, 1], color=GREY, ls=":", label="calibrated (45°)")
     ax.errorbar(mp, fr, yerr=se, fmt="o-", color="#c62828", lw=2, capsize=3,
                 label=f"Polymarket ({len(pm):,} markets)")
-    ax.text(0.30, 0.07, "longshots overpriced\n(below the line)", fontsize=8.5, color=AMBER)
+    ax.text(0.55, 0.13, "longshots overpriced\n(below the line)", fontsize=8.5, color=AMBER)
     ax.text(0.52, 0.92, "favorites underpriced\n(above the line)", fontsize=8.5, color=GREEN)
     ax.set_xlabel("market price (implied YES probability)")
     ax.set_ylabel("realised YES frequency")
@@ -203,7 +203,7 @@ def fig_v6_calibration() -> None:
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.set_aspect("equal")
-    ax.legend(loc="lower right")
+    ax.legend(loc="upper left")
     fig.tight_layout()
     fig.savefig(OUT / "v6_calibration.png", bbox_inches="tight")
     plt.close(fig)
