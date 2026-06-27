@@ -154,6 +154,8 @@ improving the tail, and part of the mean-P&L gap rides the bootstrap's upward dr
 clean, drift-independent finding is the **turnover** advantage. Block bootstrap assumes
 stationarity across the split; single horizon, normalised contract, no option bid/ask.
 
+![Out-of-sample turnover-ratio bootstrap: the deep policy trades about 42% less than BS-delta](figures/v5_turnover.png)
+
 ## V6: Favorite–longshot bias in prediction markets
 
 **Setup.** **83,304 resolved binary Yes/No markets (2023–2028 deadlines)** from the public
