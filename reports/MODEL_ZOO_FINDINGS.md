@@ -84,6 +84,8 @@ larger* down-jumps. The jump/diffusion split is not sharply identified at daily 
 and real volatility clustering (not in Merton) also contributes to the kurtosis. The robust
 conclusions are the stylised facts and the decisive AIC gap, not the exact λ.
 
+![SPY returns vs the Gaussian: fat tails on a log-density and a Normal QQ-plot](figures/v2_returns.png)
+
 ## V3 ★: Minimum-variance delta hedging
 
 **Setup (reproducible, no option panel).** Daily SPY + `^VIX` as the ATM ~1-month IV proxy.

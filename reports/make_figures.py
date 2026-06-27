@@ -209,11 +209,49 @@ def fig_v6_calibration() -> None:
     plt.close(fig)
 
 
+def fig_v2_returns() -> None:
+    """V2: 10y SPY daily log-returns are fat-tailed and left-skewed; the Normal is rejected."""
+    from scipy import stats
+    spy = fetch_and_cache("SPY", "prices_10y", "2026-06-20", _miss)
+    r = np.diff(np.log(spy["close"].to_numpy(float)))
+    exk, sk = stats.kurtosis(r), stats.skew(r)
+    mu, sd = r.mean(), r.std()
+    df, loc, scale = stats.t.fit(r)
+    d_aic = (2 * 2 - 2 * stats.norm.logpdf(r, mu, sd).sum()) \
+        - (2 * 3 - 2 * stats.t.logpdf(r, df, loc, scale).sum())
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(11, 4.4))
+    # left: density with fits, log-y so the tails are visible
+    xs = np.linspace(r.min(), r.max(), 400)
+    a1.hist(r * 100, bins=120, density=True, color="#cfd8dc", edgecolor="none", label="SPY daily")
+    a1.plot(xs * 100, stats.norm.pdf(xs, mu, sd) / 100, color=GREY, ls="--", lw=2, label="Normal fit")
+    a1.plot(xs * 100, stats.t.pdf(xs, df, loc, scale) / 100, color=GREEN, lw=2,
+            label=f"Student-t fit (ν={df:.1f})")
+    a1.set_yscale("log")
+    a1.set_xlabel("daily log-return (%)")
+    a1.set_ylabel("density (log scale)")
+    a1.set_title(f"Fat-tailed and left-skewed\nexcess kurtosis {exk:.1f}, skew {sk:.2f}")
+    a1.legend(fontsize=8)
+    # right: normal QQ-plot; the S-shape (tails off the line) is the fat-tail signature
+    (osm, osr), (slope, intercept, _) = stats.probplot(r, dist="norm")
+    a2.scatter(osm, osr * 100, s=6, color=GREEN, alpha=0.5, label="SPY returns")
+    a2.plot(osm, (slope * osm + intercept) * 100, color=GREY, ls="--", label="Normal")
+    a2.set_xlabel("Normal theoretical quantile")
+    a2.set_ylabel("SPY return quantile (%)")
+    a2.set_title(f"Normal rejected by AIC\n(ΔAIC {d_aic:.0f} in favour of Student-t)")
+    a2.legend(fontsize=8)
+    fig.suptitle("V2 — 10y SPY daily returns vs the Gaussian (GBM) assumption (real SPY)", fontsize=12)
+    fig.tight_layout()
+    fig.savefig(OUT / "v2_returns.png", bbox_inches="tight")
+    plt.close(fig)
+
+
 if __name__ == "__main__":
     fig_evidence_map()
     print("wrote evidence_map.png")
     fig_v1_term_structure()
     print("wrote v1_term_structure.png")
+    fig_v2_returns()
+    print("wrote v2_returns.png")
     fig_v4_concentration()
     print("wrote v4_concentration.png")
     fig_v6_calibration()
