@@ -1,18 +1,36 @@
 # derivatives-lab
 
-A quantitative derivatives research lab: a zoo of option-pricing and hedging models, built
-from scratch and tested with analytic anchors, then **stress-tested against real market
-data**. Every load-bearing claim made in the synthetic world is verified (or honestly
-qualified) on live SPY options, 10 years of SPY/VIX history, and 83k resolved Polymarket
-markets.
+**Eight option-pricing and hedging models, built from scratch and anchored with 112 analytic
+tests, then stress-tested against real data: a live SPY option chain, 10 years of SPY/VIX
+history, and 83,304 resolved Polymarket markets. Four claims held; two I qualified honestly
+after arguing against my own headline.**
+
+This is a verification lab, not a discovery and not a trading strategy. The interesting part is
+the discipline: build the models, take six load-bearing claims out of the synthetic world, and
+report honestly where each survives real data, where its magnitude is construction-inflated
+(V3), and where it is just a fat-tail consequence (V4). The two amber results, where the number
+shrinks once you compute the right null, are the ones I find most worth reading.
 
 ![Synthetic claims vs real-data verification](reports/figures/evidence_map.png)
 
-## Highlights
+## How to read this
 
-The full write-up with numbers and caveats is in
-**[`reports/MODEL_ZOO_FINDINGS.md`](reports/MODEL_ZOO_FINDINGS.md)** (with embedded figures).
-In brief:
+The repo is one story in two acts (the notebooks are numbered to be read in order):
+
+- **Build the zoo (`research/01`–`03`).** `01` prices a single reference contract eight ways and
+  shows the engines converge (Monte Carlo at 1/√n, the CRR tree at 1/N, all to the Black–Scholes
+  closed form), compares the smiles each model produces, and benchmarks their speed. `02` is the
+  PyTorch deep hedger, sanity-checked to reproduce the BS delta at zero cost before frictions are
+  added. `03` frames a prediction market as a binary option and solves it with a Crank–Nicolson PDE.
+- **Verify on real data (`research/04`–`09`).** The six stress tests, V1 through V6, summarised below.
+  Each notebook states its claim, the test, and the verdict, and keeps its caveats in plain sight.
+
+A one-page map of all of this lives in [`research/README.md`](research/README.md).
+
+## The six verifications (V1–V6)
+
+The full write-up with every number and caveat is in
+**[`reports/MODEL_ZOO_FINDINGS.md`](reports/MODEL_ZOO_FINDINGS.md)** (with embedded figures). In brief:
 
 | # | Real-data verification | Result |
 |---|---|---|
@@ -23,19 +41,22 @@ In brief:
 | V5 | Deep hedger out-of-sample | On block-bootstrapped real returns, the cost-aware policy **trades ~42% less** than BS-delta (turnover ratio 0.58, 95% CI [0.56, 0.62], the clean result); the CVaR₅ gain is drift-aided and not robust (positive in under half of OOS-block bootstraps). |
 | V6 | Favorite–longshot bias (83k Polymarket markets, 2023–2028) | Longshots (p<0.10) priced **2.3%** resolve **1.6%**; favorites (p>0.90) **96.4%→98.8%**; slope **1.08** (cluster-robust, 95% CI [1.07, 1.10]) > 1 across tiers and years; longshot side measure-sensitive. |
 
-## Models
+## The model zoo
 
-- **`models/`**: `black_scholes` (greeks, IV, digital options), `merton` (jump-diffusion,
-  closed form + paths), `heston` (Carr–Madan FFT + quadrature + QE Monte Carlo + DE
-  calibrator), `binomial` (CRR, American early exercise), `monte_carlo` (GBM, antithetic,
-  exotics), `local_vol` (CEV + Dupire), `pde_solver` (Crank–Nicolson).
-- **`ml/`**: `vol_surface_nn` (small MLP fit to a hand-specified skew/term-structure surface + yfinance fetcher),
-  `deep_hedging` (PyTorch policy, mean-variance / entropic / CVaR risk, transaction costs,
-  external path sources, option overlay).
-- **`backtesting/`**: Sharpe, Sortino, max drawdown, summary metrics.
-- **`data/`**: `fetcher` (cache-first market-data pulls; cache is gitignored).
-- **`research/`**: executed notebooks `04`–`09` (the V1–V6 verifications above). Notebooks `01`–`03` cover the synthetic model-building stage and are not included in this public repo.
-- **`tests/`**: analytic-anchor unit tests.
+Each model relaxes one Black–Scholes assumption, which is the thread the six verifications pull on:
+
+- **Black–Scholes** (`models/black_scholes`) is the baseline: greeks, implied vol, digital options.
+- **Merton** (`models/merton`) adds jumps, which is what produces the steep short-dated skew in V1.
+- **Heston** (`models/heston`) adds stochastic vol (Carr–Madan FFT, semi-analytic quadrature, a QE
+  Monte Carlo scheme, and a differential-evolution calibrator) and competes with Merton on the smile.
+- **CRR binomial** (`models/binomial`) prices American early exercise; **Monte Carlo**
+  (`models/monte_carlo`) and the **Crank–Nicolson PDE** (`models/pde_solver`) are the numerical backbones.
+- **Local vol** (`models/local_vol`, CEV and Dupire) reads the skew straight off a surface.
+- The **deep hedger** (`ml/deep_hedging`, PyTorch) replaces the formula delta with a learned policy
+  under transaction costs, which is V5. `ml/vol_surface_nn` fits a small MLP to a vol surface.
+
+Supporting code: `backtesting/` (Sharpe, Sortino, max drawdown), `data/fetcher` (cache-first market
+data), `tests/` (analytic-anchor unit tests).
 
 ## Setup
 
@@ -45,25 +66,24 @@ make ci               # ruff + pytest  (mirrors GitHub Actions)
 ```
 
 Python ≥ 3.10. PyTorch lives in the `[ml]` extra and `duckdb` in the `[research]` extra (V6
-re-reads the Polymarket trade dump via remote DuckDB on a cache miss); both are folded into
-`[all]`. CI installs `[dev]` only, so the torch-dependent tests skip there automatically.
+re-reads the Polymarket trade dump via remote DuckDB on a cache miss); both are folded into `[all]`.
+CI installs `[dev]` only, so the torch-dependent tests skip there automatically.
 
 ## Tests & reproducibility
 
-`pytest`: **112 tests** (102 run in CI; 10 torch-dependent deep-hedging tests need the `ml`
-extra and skip in CI), most anchored on analytic identities (λ=0 Merton collapses to
-Black–Scholes, put–call parity, CRR → BS convergence, finite-difference vs closed-form deltas,
-ξ→0 Heston → BS, discounted-martingale checks). Real-data fetches are pinned to dated parquet
-caches so the notebooks re-run offline and deterministically; CI runs only `tests/`, never the
-data notebooks. The caches are gitignored, so a fresh clone regenerates them from the network
-(yfinance, plus remote DuckDB for V6) on the first notebook run, then runs offline thereafter.
+`pytest`: **112 tests** (102 run in CI; 10 torch-dependent deep-hedging tests need the `ml` extra and
+skip in CI), most anchored on analytic identities (λ=0 Merton collapses to Black–Scholes, put–call
+parity, CRR → BS convergence, finite-difference vs closed-form deltas, ξ→0 Heston → BS,
+discounted-martingale checks). Real-data fetches are pinned to dated parquet caches so the notebooks
+re-run offline and deterministically; CI runs only `tests/`, never the data notebooks. The caches are
+gitignored, so a fresh clone regenerates them from the network (yfinance, plus remote DuckDB for V6)
+on the first notebook run, then runs offline thereafter.
 
-## Scope
+## What this is
 
-This is a **verification lab**, not a discovery or a trading strategy. The phenomena tested are
-well-established; the point is to re-derive the models from scratch, then stress-test their
-claims on real data and show honestly where each holds, where its magnitude is construction-
-inflated (V3), and where it is just a fat-tail consequence (V4). It demonstrates engineering +
-research hygiene, not live edge. See the **Limitations & future work** section of
-[`reports/MODEL_ZOO_FINDINGS.md`](reports/MODEL_ZOO_FINDINGS.md) for what more data/time would add
-(multi-date calibration with CIs and real option quotes for V3).
+A demonstration of engineering and research hygiene: models re-derived from scratch, claims taken to
+real data, null hypotheses computed against my own results, and magnitudes reported with their
+construction caveats rather than the prettiest version. Start with the
+[write-up](reports/MODEL_ZOO_FINDINGS.md), then the notebooks in `research/`. What more data and time
+would add (multi-date calibration with confidence intervals, real option quotes for V3) is in the
+write-up's Limitations section.
