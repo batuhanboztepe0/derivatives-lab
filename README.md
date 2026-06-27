@@ -89,9 +89,9 @@ construction caveats rather than the prettiest version. Start with the
 would add (multi-date calibration with confidence intervals, real option quotes for V3) is in the
 write-up's Limitations section.
 
-## AI tools
+## AI usage
 
-This project was built with AI coding assistance (Claude). The use was limited to code
+This project was built with Claude Code, Anthropic's agentic coding tool. The use covered code
 implementation and refactoring, figure generation, and drafting. At all stages the outputs were
 reviewed, checked against the analytic unit tests and the source code, and revised by me. The
 responsibility for the final content, analysis, and conclusions rests entirely with me.
