@@ -91,7 +91,7 @@ def main():
     ax.axvline(1.0, color=BS_BLUE, ls="--", lw=2, label="BS-delta (no improvement)")
     ax.set_xlabel("turnover ratio  (deep policy / BS-delta), out-of-sample")
     ax.set_ylabel("bootstrap resamples")
-    ax.set_title("V5 - the deep hedger trades ~42% less, out-of-sample\n"
+    ax.set_title("V5: the deep hedger trades ~42% less, out-of-sample\n"
                  "moving-block bootstrap over real OOS return blocks (tc = 10 bps)")
     ax.legend(fontsize=8.5, loc="upper right")
     fig.tight_layout()

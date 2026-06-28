@@ -4,7 +4,7 @@ reports/make_figures.py
 Regenerate the figures embedded in reports/MODEL_ZOO_FINDINGS.md and README.md.
 
 Deterministic and reproducible: synthetic figures need only the models; the real-data
-figures read the dated parquet caches under data/cache/ (gitignored — see data/fetcher.py).
+figures read the dated parquet caches under data/cache/ (gitignored: see data/fetcher.py).
 Run from the repo root:  python reports/make_figures.py
 """
 
@@ -35,7 +35,7 @@ GREEN, AMBER, GREY = "#2e7d32", "#ef6c00", "#9e9e9e"
 
 
 def _miss():
-    raise RuntimeError("cache missing — run the V-notebooks first")
+    raise RuntimeError("cache missing: run the V-notebooks first")
 
 
 def _v4_convexity() -> tuple[np.ndarray, np.ndarray]:
@@ -68,7 +68,7 @@ def fig_evidence_map() -> None:
         ("V1  smile / skew", "Merton (jumps) fits short skew 0.52vp;\nHeston underfits 1.7vp; flat BS 4.5vp", GREEN),
         ("V2  fat tails", "excess kurtosis 15.2, GBM rejected\n(Student-t/jump-mix beats Normal by AIC)", GREEN),
         ("V3  MV-delta", "positive vs 0% GBM null; magnitude\ninflated by VIX-as-IV (~88% leakage)", AMBER),
-        ("V4  gamma P&L", f"concentrates on big moves ({v4_share}%) —\n= fat-tail null, illustrative not jumps", AMBER),
+        ("V4  gamma P&L", f"concentrates on big moves ({v4_share}%):\nfat-tail null, illustrative not jumps", AMBER),
         ("V5  deep hedge OOS", "−42% turnover, CI [0.56,0.62] (clean);\nCVaR gain not robust (drift-aided)", GREEN),
         ("V6  longshot bias", "83k markets: slope 1.08 > 1 across tiers/years\n(cluster-robust); longshot side measure-sensitive", GREEN),
     ]
@@ -90,7 +90,7 @@ def fig_evidence_map() -> None:
         ax.scatter([9.6], [y], s=90, color=col, zorder=5)
     ax.text(5, -0.15, "green = confirmed   ·   amber = direction confirmed, magnitude caveated",
             ha="center", fontsize=8.5, color=GREY)
-    fig.suptitle("derivatives-lab — synthetic claims vs real-data verification (V1–V6)", fontsize=12)
+    fig.suptitle("derivatives-lab: synthetic claims vs real-data verification (V1–V6)", fontsize=12)
     fig.tight_layout()
     fig.savefig(OUT / "evidence_map.png", bbox_inches="tight")
     plt.close(fig)
@@ -127,7 +127,7 @@ def fig_v1_term_structure() -> None:
         a.set_xlabel("moneyness  K / S")
         a.legend(title="maturity", fontsize=8)
     a1.set_ylabel("model implied vol (%)")
-    fig.suptitle("V1 — short-dated skew: jumps vs diffusive stochastic vol (synthetic)", fontsize=12)
+    fig.suptitle("V1: short-dated skew: jumps vs diffusive stochastic vol (synthetic)", fontsize=12)
     fig.tight_layout()
     fig.savefig(OUT / "v1_term_structure.png", bbox_inches="tight")
     plt.close(fig)
@@ -162,7 +162,7 @@ def fig_v1_smile_fit() -> None:
                label=f"flat BS: {rmse(bs_flat * np.ones_like(miv)):.2f} vp")
     ax.set_xlabel("moneyness  K / S")
     ax.set_ylabel("implied vol (%)")
-    ax.set_title(f"V1 — real SPY smile fit ({int(dte[rep])}-day expiry, {len(K)} strikes)\n"
+    ax.set_title(f"V1: real SPY smile fit ({int(dte[rep])}-day expiry, {len(K)} strikes)\n"
                  "jumps fit the short skew; diffusive stochastic vol underfits")
     ax.legend(title="IV-RMSE", fontsize=8.5)
     fig.tight_layout()
@@ -178,7 +178,7 @@ def _spy_vix():
 
 
 def fig_v4_concentration() -> None:
-    """Short-gamma P&L concentrates on big-move days — vs a fat-tailed null."""
+    """Short-gamma P&L concentrates on big-move days, against a fat-tailed null."""
     gpnl, order = _v4_convexity()
     frac = np.arange(1, len(gpnl) + 1) / len(gpnl)
     cum = np.cumsum(gpnl[order]) / gpnl.sum()
@@ -203,7 +203,7 @@ def fig_v4_concentration() -> None:
     a2.set_title("…but that is what fat tails imply\n(observed ≈ t(6) null, not jumps)")
     for i, v in enumerate([gauss, t6, obs]):
         a2.text(i, v * 100 + 0.6, f"{v * 100:.0f}%", ha="center", fontsize=9)
-    fig.suptitle("V4 — gamma-P&L concentration is a fat-tail consequence (real SPY)", fontsize=12)
+    fig.suptitle("V4: gamma-P&L concentration is a fat-tail consequence (real SPY)", fontsize=12)
     fig.tight_layout()
     fig.savefig(OUT / "v4_concentration.png", bbox_inches="tight")
     plt.close(fig)
@@ -235,7 +235,7 @@ def fig_v6_calibration() -> None:
     ax.text(0.52, 0.92, "favorites underpriced\n(above the line)", fontsize=8.5, color=GREEN)
     ax.set_xlabel("market price (implied YES probability)")
     ax.set_ylabel("realised YES frequency")
-    ax.set_title(f"V6 — favorite–longshot bias on Polymarket ({_yr_min}–{_yr_max})\n"
+    ax.set_title(f"V6: favorite–longshot bias on Polymarket ({_yr_min}–{_yr_max})\n"
                  "slope 1.08 > 1 across tiers and years (cluster-robust)")
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
@@ -276,7 +276,7 @@ def fig_v2_returns() -> None:
     a2.set_ylabel("SPY return quantile (%)")
     a2.set_title(f"Normal rejected by AIC\n(ΔAIC {d_aic:.0f} in favour of Student-t)")
     a2.legend(fontsize=8)
-    fig.suptitle("V2 — 10y SPY daily returns vs the Gaussian (GBM) assumption (real SPY)", fontsize=12)
+    fig.suptitle("V2: 10y SPY daily returns vs the Gaussian (GBM) assumption (real SPY)", fontsize=12)
     fig.tight_layout()
     fig.savefig(OUT / "v2_returns.png", bbox_inches="tight")
     plt.close(fig)
